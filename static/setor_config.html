@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>BBDI Gestao — Templates por setor</title>
+  <link rel="stylesheet" href="/static/shared/theme.css" />
+  <script src="/static/shared/app.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="cfg()" x-init="init()">
+
+  <header class="topbar">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <h1>Templates por setor</h1>
+    </div>
+    <div style="display:flex; gap:12px;">
+      <a href="/diretor" class="btn btn-ghost">Voltar</a>
+      <a href="/logout" class="btn btn-ghost">Sair</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <p class="muted" style="margin-top:0;">
+      Defina como cada setor estrutura suas metas. Trocar o template nao apaga objetivos antigos — eles ficam marcados com o template em que foram criados.
+    </p>
+
+    <div style="display:grid; gap:14px; margin-top:18px;">
+      <template x-for="s in setores" :key="s.id">
+        <div class="card" style="padding:18px;" :style="`border-left:3px solid ${s.cor}`">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:18px;">
+            <div>
+              <h3 style="margin:0;" x-text="s.nome"></h3>
+              <p class="muted" style="margin:6px 0 0 0; font-size:12px;" x-text="descricaoTemplate(s.template)"></p>
+            </div>
+            <select class="input" style="width:auto;" :value="s.template" @change="salvar(s.id, $event.target.value)">
+              <option value="okr">OKR (Objetivo -> KR -> Projeto -> Tarefa)</option>
+              <option value="simples">Simples (Meta -> Projeto -> Tarefa)</option>
+              <option value="desafios">Desafios (Desafio -> Meta -> Projeto -> Tarefa)</option>
+            </select>
+          </div>
+        </div>
+      </template>
+    </div>
+  </main>
+
+  <script>
+    function cfg() {
+      return {
+        setores: [],
+        async init() {
+          try { this.setores = await api.get('/api/setores'); }
+          catch (e) { alert(e.message); }
+        },
+        descricaoTemplate(t) {
+          return ({
+            okr: 'OKR: Objetivo anual com KRs trimestrais. Bom para metas mensuraveis.',
+            simples: 'Simples: meta direta + projetos. Ideal para setores operacionais.',
+            desafios: 'Desafios: tema estrategico amplo, com metas debaixo. Bom para iniciativas longas.',
+          })[t] || '';
+        },
+        async salvar(setor_id, template) {
+          try {
+            await api.patch(`/api/setores/${setor_id}`, { template });
+            this.setores = this.setores.map(s => s.id === setor_id ? { ...s, template } : s);
+          } catch (e) { alert('Erro: ' + e.message); }
+        },
+      };
+    }
+  </script>
+</body>
+</html>

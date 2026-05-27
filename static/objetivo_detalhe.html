@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>BBDI Gestao — Objetivo</title>
+  <link rel="stylesheet" href="/static/shared/theme.css" />
+  <script src="/static/shared/app.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="objDetalhe()" x-init="init()">
+
+  <header class="topbar">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <a :href="setor.id ? `/setor/${setor.id}` : '/'" class="btn btn-ghost">&larr; Voltar</a>
+      <h1 x-text="setor.nome || 'Carregando...'"></h1>
+    </div>
+    <a href="/logout" class="btn btn-ghost">Sair</a>
+  </header>
+
+  <main class="container" x-show="obj.id">
+    <!-- Header do objetivo -->
+    <div class="card" style="padding:20px; margin-bottom:18px;">
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+        <span class="badge badge-neutral" x-text="NIVEL_LABEL[obj.nivel]"></span>
+        <span :class="statusBadgeClass(obj.status)" x-text="STATUS_LABEL[obj.status]"></span>
+        <span class="faint" style="font-size:11px;"
+              x-text="`${obj.periodo_tipo} ${obj.periodo_ano}${obj.periodo_trimestre ? ' Q' + obj.periodo_trimestre : ''}`"></span>
+      </div>
+      <h2 style="margin:0; font-size:22px;" x-text="obj.titulo"></h2>
+      <p class="muted" style="margin:8px 0 0 0;" x-text="obj.descricao"></p>
+
+      <div style="display:grid; grid-template-columns:1fr auto; gap:18px; margin-top:18px; align-items:center;">
+        <div>
+          <div class="progress"><div class="progress-bar" :style="`width:${obj.progresso_pct}%`"></div></div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input class="input" type="number" min="0" max="100" style="width:80px;" x-model.number="novoProgresso" />
+          <span class="muted">%</span>
+          <button class="btn btn-primary" @click="salvarProgresso()">Atualizar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filhos (sub-objetivos) -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;" x-show="aceitaFilhos">
+      <h3 style="margin:0;" x-text="labelFilho() + 's'"></h3>
+      <button class="btn btn-primary" @click="abrirFormFilho()">+ Novo <span x-text="labelFilho().toLowerCase()"></span></button>
+    </div>
+
+    <div style="display:grid; gap:12px;">
+      <template x-for="f in obj.filhos || []" :key="f.id">
+        <div class="card" style="padding:14px;">
+          <div style="display:flex; justify-content:space-between; gap:12px;">
+            <div style="flex:1;">
+              <div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
+                <span class="badge badge-neutral" x-text="NIVEL_LABEL[f.nivel]"></span>
+                <span :class="statusBadgeClass(f.status)" x-text="STATUS_LABEL[f.status]"></span>
+              </div>
+              <a :href="`/objetivos/${f.id}`" style="font-weight:600; color:var(--text);" x-text="f.titulo"></a>
+            </div>
+            <div style="text-align:right; min-width:120px;">
+              <div style="font-weight:700;" x-text="f.progresso_pct + '%'"></div>
+              <div class="progress" style="margin-top:4px;"><div class="progress-bar" :style="`width:${f.progresso_pct}%`"></div></div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <p class="muted" x-show="aceitaFilhos && (obj.filhos || []).length === 0">Nenhum item ainda.</p>
+    </div>
+
+    <!-- Projetos vinculados (quando objetivo e o nivel mais baixo do template) -->
+    <div style="margin-top:24px;" x-show="!aceitaFilhos || ehNivelMaisBaixoDoTemplate">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="margin:0;">Projetos vinculados</h3>
+        <button class="btn btn-primary" @click="abrirFormProjeto()">+ Novo projeto</button>
+      </div>
+      <div style="display:grid; gap:10px;">
+        <template x-for="p in projetos" :key="p.id">
+          <div class="card" style="padding:14px;">
+            <div style="display:flex; justify-content:space-between; gap:10px;">
+              <div style="flex:1;">
+                <div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
+                  <span :class="statusBadgeClass(p.status)" x-text="STATUS_LABEL[p.status]"></span>
+                  <span x-show="p.prazo" class="faint" style="font-size:11px;"
+                        x-text="'Prazo: ' + fmtDataCurta(p.prazo)"></span>
+                </div>
+                <a :href="`/projetos/${p.id}`" style="font-weight:600; color:var(--text);" x-text="p.titulo"></a>
+                <p class="muted" style="margin:4px 0 0 0; font-size:12px;" x-text="p.descricao"></p>
+              </div>
+              <div style="text-align:right; min-width:120px;">
+                <div style="font-weight:700;" x-text="p.progresso_pct + '%'"></div>
+                <div class="progress" style="margin-top:4px;"><div class="progress-bar" :style="`width:${p.progresso_pct}%`"></div></div>
+              </div>
+            </div>
+          </div>
+        </template>
+        <p class="muted" x-show="projetos.length === 0">Nenhum projeto ainda.</p>
+      </div>
+    </div>
+
+    <!-- Comentarios -->
+    <div style="margin-top:24px;">
+      <h3 style="margin:0 0 10px 0;">Atualizacoes</h3>
+      <div class="card" style="padding:14px; margin-bottom:10px;">
+        <textarea class="input" rows="2" x-model="novoComentario" placeholder="Atualizacao ou contexto..."></textarea>
+        <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+          <button class="btn btn-primary" @click="postComentario()">Publicar</button>
+        </div>
+      </div>
+      <div style="display:grid; gap:8px;">
+        <template x-for="c in comentarios" :key="c.id">
+          <div class="card" style="padding:12px;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim);">
+              <span><strong style="color:var(--text);" x-text="c.usuario_nome"></strong> <span class="badge badge-neutral" x-text="c.usuario_papel"></span></span>
+              <span x-text="fmtData(c.criado_em)"></span>
+            </div>
+            <p style="margin:6px 0 0 0; font-size:13px; white-space:pre-wrap;" x-text="c.texto"></p>
+          </div>
+        </template>
+        <p class="muted" x-show="comentarios.length === 0">Nenhuma atualizacao ainda.</p>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal filho -->
+  <div x-show="form.aberto" x-cloak
+       style="position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:50;"
+       @click.self="form.aberto = false">
+    <div class="card" style="padding:24px; width:520px; max-width:90vw;">
+      <h3 style="margin:0 0 16px 0;" x-text="form.tituloModal"></h3>
+      <div style="display:grid; gap:12px;">
+        <input class="input" placeholder="Titulo *" x-model="form.titulo" />
+        <textarea class="input" rows="3" placeholder="Descricao" x-model="form.descricao"></textarea>
+        <template x-if="form.tipo === 'projeto'">
+          <input class="input" type="date" x-model="form.prazo" />
+        </template>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:18px;">
+        <button class="btn btn-ghost" @click="form.aberto = false">Cancelar</button>
+        <button class="btn btn-primary" @click="salvarForm()">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const CADEIA_TEMPLATE = {
+      okr: ['objetivo_anual', 'key_result'],
+      simples: ['meta'],
+      desafios: ['desafio', 'meta'],
+    };
+
+    function objDetalhe() {
+      return {
+        obj: {},
+        setor: {},
+        projetos: [],
+        comentarios: [],
+        novoProgresso: 0,
+        novoComentario: '',
+        form: { aberto: false, tipo: '', tituloModal: '', titulo: '', descricao: '', prazo: '' },
+
+        get objId() { return parseInt(location.pathname.split('/').pop(), 10); },
+
+        get aceitaFilhos() {
+          const cadeia = CADEIA_TEMPLATE[this.setor.template] || [];
+          const idx = cadeia.indexOf(this.obj.nivel);
+          return idx >= 0 && idx < cadeia.length - 1;
+        },
+
+        get ehNivelMaisBaixoDoTemplate() {
+          const cadeia = CADEIA_TEMPLATE[this.setor.template] || [];
+          return cadeia[cadeia.length - 1] === this.obj.nivel;
+        },
+
+        labelFilho() {
+          if (!this.aceitaFilhos) return '';
+          const cadeia = CADEIA_TEMPLATE[this.setor.template] || [];
+          const idx = cadeia.indexOf(this.obj.nivel);
+          return NIVEL_LABEL[cadeia[idx + 1]];
+        },
+
+        async init() {
+          try {
+            this.obj = await api.get(`/api/objetivos/${this.objId}`);
+            this.novoProgresso = this.obj.progresso_pct;
+            this.setor = await api.get(`/api/setores/${this.obj.setor_id}`);
+            await this.carregarProjetos();
+            await this.carregarComentarios();
+          } catch (e) { alert(e.message); }
+        },
+
+        async carregarProjetos() {
+          this.projetos = await api.get(`/api/projetos?objetivo_id=${this.objId}`);
+        },
+
+        async carregarComentarios() {
+          this.comentarios = await api.get(`/api/comentarios?entidade_tipo=objetivo&entidade_id=${this.objId}`);
+        },
+
+        async salvarProgresso() {
+          try {
+            await api.post(`/api/objetivos/${this.objId}/progresso`, { progresso_pct: this.novoProgresso });
+            this.obj.progresso_pct = this.novoProgresso;
+          } catch (e) { alert(e.message); }
+        },
+
+        abrirFormFilho() {
+          const cadeia = CADEIA_TEMPLATE[this.setor.template] || [];
+          const idx = cadeia.indexOf(this.obj.nivel);
+          const filhoNivel = cadeia[idx + 1];
+          this.form = {
+            aberto: true, tipo: 'filho', filhoNivel,
+            tituloModal: `Novo ${NIVEL_LABEL[filhoNivel]}`,
+            titulo: '', descricao: '', prazo: '',
+          };
+        },
+
+        abrirFormProjeto() {
+          this.form = {
+            aberto: true, tipo: 'projeto',
+            tituloModal: 'Novo projeto',
+            titulo: '', descricao: '', prazo: '',
+          };
+        },
+
+        async salvarForm() {
+          if (!this.form.titulo.trim()) { alert('Titulo obrigatorio.'); return; }
+          try {
+            if (this.form.tipo === 'filho') {
+              await api.post('/api/objetivos', {
+                setor_id: this.obj.setor_id,
+                nivel: this.form.filhoNivel,
+                parent_id: this.obj.id,
+                titulo: this.form.titulo,
+                descricao: this.form.descricao,
+                periodo_tipo: 'trimestral',
+                periodo_ano: this.obj.periodo_ano,
+                periodo_trimestre: this.obj.periodo_trimestre || trimestreAtual(),
+              });
+              this.obj = await api.get(`/api/objetivos/${this.objId}`);
+            } else {
+              await api.post('/api/projetos', {
+                objetivo_id: this.objId,
+                titulo: this.form.titulo,
+                descricao: this.form.descricao,
+                prazo: this.form.prazo || null,
+              });
+              await this.carregarProjetos();
+            }
+            this.form.aberto = false;
+          } catch (e) { alert('Erro: ' + e.message); }
+        },
+
+        async postComentario() {
+          const txt = this.novoComentario.trim();
+          if (!txt) return;
+          try {
+            await api.post('/api/comentarios', {
+              entidade_tipo: 'objetivo', entidade_id: this.objId, texto: txt,
+            });
+            this.novoComentario = '';
+            await this.carregarComentarios();
+          } catch (e) { alert(e.message); }
+        },
+      };
+    }
+  </script>
+</body>
+</html>

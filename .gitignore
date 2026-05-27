@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.env.local
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/backups/
+.DS_Store
+.idea/
+.vscode/
+*.log

@@ -1,0 +1,13 @@
+services:
+  gestao:
+    build: .
+    ports:
+      - "18090:18090"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=18090
+      - SESSION_SECRET=${SESSION_SECRET}
+      - DIRETOR_SENHA=${DIRETOR_SENHA}
+      - SUPERVISOR_SENHA_DEFAULT=${SUPERVISOR_SENHA_DEFAULT}
+    restart: unless-stopped

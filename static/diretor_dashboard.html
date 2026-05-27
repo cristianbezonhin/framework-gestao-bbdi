@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BBDI Gestao — Diretor</title>
+  <link rel="stylesheet" href="/static/shared/theme.css" />
+  <script src="/static/shared/app.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="dashboardDiretor()" x-init="init()">
+
+  <header class="topbar">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <h1>BBDI Gestao</h1>
+      <span class="badge badge-warn">Diretor</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <select class="input" style="width:auto;" x-model.number="ano" @change="carregar()">
+        <template x-for="a in [anoAtual(), anoAtual() - 1, anoAtual() + 1]">
+          <option :value="a" x-text="a"></option>
+        </template>
+      </select>
+      <select class="input" style="width:auto;" x-model.number="trimestre" @change="carregar()">
+        <option :value="1">Q1 (Jan-Mar)</option>
+        <option :value="2">Q2 (Abr-Jun)</option>
+        <option :value="3">Q3 (Jul-Set)</option>
+        <option :value="4">Q4 (Out-Dez)</option>
+      </select>
+      <a href="/setor_config" class="btn btn-ghost">Templates</a>
+      <span class="user-tag" x-text="me.nome"></span>
+      <a href="/logout" class="btn btn-ghost">Sair</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+      <div>
+        <h2 style="margin:0; font-size:22px;">Panorama por setor</h2>
+        <p class="muted" style="margin:4px 0 0 0; font-size:13px;">
+          <span x-text="`Q${trimestre}/${ano}`"></span> — clique num setor para detalhar.
+        </p>
+      </div>
+      <div class="muted" style="font-size:12px;" x-show="loading">Carregando...</div>
+    </div>
+
+    <div class="grid-setores">
+      <template x-for="s in panorama" :key="s.setor.id">
+        <a class="card setor-card" :href="`/setor/${s.setor.id}`"
+           :style="`--setor-cor: ${s.setor.cor}`">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <h3 x-text="s.setor.nome"></h3>
+            <span class="badge badge-neutral" x-text="s.setor.template.toUpperCase()"></span>
+          </div>
+          <div class="progress" style="margin-top:14px;">
+            <div class="progress-bar" :style="`width:${s.objetivos.progresso_medio}%`"></div>
+          </div>
+          <div class="kpis">
+            <div class="kpi">
+              <div class="kpi-val" x-text="s.objetivos.progresso_medio + '%'"></div>
+              <div class="kpi-label">progresso medio</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-val" x-text="s.objetivos.total"></div>
+              <div class="kpi-label" x-text="nivelLabelTopo(s.setor.template).toLowerCase() + 's'"></div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-val" :style="s.projetos.atrasados > 0 ? 'color:#fca5a5' : ''" x-text="s.projetos.atrasados"></div>
+              <div class="kpi-label">projetos atrasados</div>
+            </div>
+          </div>
+          <div style="margin-top:12px; display:flex; gap:6px; font-size:11px; color: var(--text-dim);">
+            <span x-text="`${s.tarefas.feitas}/${s.tarefas.total} tarefas feitas`"></span>
+            <span x-show="s.objetivos.em_risco > 0" class="badge badge-err"
+                  x-text="`${s.objetivos.em_risco} em risco`"></span>
+          </div>
+        </a>
+      </template>
+    </div>
+
+    <div x-show="!loading && panorama.length === 0" class="card" style="margin-top:24px; padding:32px; text-align:center;">
+      <p class="muted">Nenhum setor encontrado. Verifique o seed inicial.</p>
+    </div>
+  </main>
+
+  <script>
+    function dashboardDiretor() {
+      return {
+        me: {},
+        ano: anoAtual(),
+        trimestre: trimestreAtual(),
+        panorama: [],
+        loading: false,
+
+        async init() {
+          try { this.me = await api.get('/api/me'); } catch (_) {}
+          await this.carregar();
+        },
+
+        async carregar() {
+          this.loading = true;
+          try {
+            const data = await api.get(`/api/dashboard/diretor?ano=${this.ano}&trimestre=${this.trimestre}`);
+            this.panorama = data.por_setor;
+          } catch (e) {
+            console.error(e);
+            alert('Erro ao carregar: ' + e.message);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        nivelLabelTopo(template) {
+          const map = { okr: 'Objetivo', simples: 'Meta', desafios: 'Desafio' };
+          return map[template] || 'Objetivo';
+        },
+      };
+    }
+  </script>
+</body>
+</html>

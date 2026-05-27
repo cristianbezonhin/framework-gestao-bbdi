@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>BBDI Gestao — Projeto</title>
+  <link rel="stylesheet" href="/static/shared/theme.css" />
+  <script src="/static/shared/app.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body x-data="projDetalhe()" x-init="init()">
+
+  <header class="topbar">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <a :href="proj.objetivo_id ? `/objetivos/${proj.objetivo_id}` : '/'" class="btn btn-ghost">&larr; Voltar</a>
+      <h1>Projeto</h1>
+    </div>
+    <a href="/logout" class="btn btn-ghost">Sair</a>
+  </header>
+
+  <main class="container" x-show="proj.id">
+    <div class="card" style="padding:20px; margin-bottom:18px;">
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+        <span :class="statusBadgeClass(proj.status)" x-text="STATUS_LABEL[proj.status]"></span>
+        <span x-show="proj.prazo" class="faint" style="font-size:12px;" x-text="'Prazo: ' + fmtDataCurta(proj.prazo)"></span>
+      </div>
+      <h2 style="margin:0;" x-text="proj.titulo"></h2>
+      <p class="muted" style="margin:8px 0 0 0;" x-text="proj.descricao"></p>
+
+      <div style="display:grid; grid-template-columns:1fr auto auto; gap:14px; margin-top:16px; align-items:center;">
+        <div class="progress"><div class="progress-bar" :style="`width:${proj.progresso_pct}%`"></div></div>
+        <div style="font-weight:700;" x-text="proj.progresso_pct + '%'"></div>
+        <button class="btn btn-ghost" @click="recalcular()">Recalcular do automatico</button>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+        <template x-for="s in ['nao_iniciado', 'em_andamento', 'bloqueado', 'concluido']">
+          <button class="btn"
+                  :class="proj.status === s ? 'btn-primary' : 'btn-ghost'"
+                  @click="alterarStatus(s)"
+                  x-text="STATUS_LABEL[s]"></button>
+        </template>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <h3 style="margin:0;">Tarefas</h3>
+      <button class="btn btn-primary" @click="abrirFormTarefa()">+ Nova tarefa</button>
+    </div>
+
+    <div style="display:grid; gap:10px;">
+      <template x-for="t in tarefas" :key="t.id">
+        <div class="card" style="padding:12px;">
+          <div style="display:flex; gap:12px; align-items:center;">
+            <select class="input" style="width:auto; padding:4px 8px;" :value="t.status" @change="updStatus(t.id, $event.target.value)">
+              <option value="a_fazer">A fazer</option>
+              <option value="fazendo">Fazendo</option>
+              <option value="revisao">Revisao</option>
+              <option value="feito">Feito</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+            <div style="flex:1;">
+              <div style="font-weight:600;" :style="t.status === 'feito' ? 'text-decoration:line-through; opacity:0.6' : ''" x-text="t.titulo"></div>
+              <div style="font-size:11px; color:var(--text-dim); display:flex; gap:8px;">
+                <span x-show="t.prazo" x-text="'Prazo: ' + fmtDataCurta(t.prazo)"></span>
+                <span :class="t.prioridade === 'alta' ? 'badge badge-err' : t.prioridade === 'baixa' ? 'badge badge-neutral' : 'badge badge-warn'" x-text="t.prioridade"></span>
+              </div>
+            </div>
+            <button class="btn btn-ghost" @click="excluir(t.id)" title="Excluir">×</button>
+          </div>
+        </div>
+      </template>
+      <p class="muted" x-show="tarefas.length === 0">Nenhuma tarefa ainda. Crie a primeira.</p>
+    </div>
+
+    <!-- Comentarios -->
+    <div style="margin-top:24px;">
+      <h3 style="margin:0 0 10px 0;">Atualizacoes</h3>
+      <div class="card" style="padding:14px; margin-bottom:10px;">
+        <textarea class="input" rows="2" x-model="novoComentario" placeholder="Atualizacao do projeto..."></textarea>
+        <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+          <button class="btn btn-primary" @click="postComentario()">Publicar</button>
+        </div>
+      </div>
+      <div style="display:grid; gap:8px;">
+        <template x-for="c in comentarios" :key="c.id">
+          <div class="card" style="padding:12px;">
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim);">
+              <span><strong style="color:var(--text);" x-text="c.usuario_nome"></strong> <span class="badge badge-neutral" x-text="c.usuario_papel"></span></span>
+              <span x-text="fmtData(c.criado_em)"></span>
+            </div>
+            <p style="margin:6px 0 0 0; font-size:13px; white-space:pre-wrap;" x-text="c.texto"></p>
+          </div>
+        </template>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal nova tarefa -->
+  <div x-show="form.aberto" x-cloak
+       style="position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:50;"
+       @click.self="form.aberto = false">
+    <div class="card" style="padding:24px; width:520px; max-width:90vw;">
+      <h3 style="margin:0 0 16px 0;">Nova tarefa</h3>
+      <div style="display:grid; gap:12px;">
+        <input class="input" placeholder="Titulo *" x-model="form.titulo" />
+        <textarea class="input" rows="2" placeholder="Descricao" x-model="form.descricao"></textarea>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+          <input class="input" type="date" x-model="form.prazo" />
+          <select class="input" x-model="form.prioridade">
+            <option value="baixa">Baixa</option>
+            <option value="media">Media</option>
+            <option value="alta">Alta</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:18px;">
+        <button class="btn btn-ghost" @click="form.aberto = false">Cancelar</button>
+        <button class="btn btn-primary" @click="salvarTarefa()">Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function projDetalhe() {
+      return {
+        proj: {}, tarefas: [], comentarios: [],
+        novoComentario: '',
+        form: { aberto: false, titulo: '', descricao: '', prazo: '', prioridade: 'media' },
+
+        get projId() { return parseInt(location.pathname.split('/').pop(), 10); },
+
+        async init() {
+          try {
+            const p = await api.get(`/api/projetos/${this.projId}`);
+            this.proj = p;
+            this.tarefas = p.tarefas || [];
+            this.comentarios = await api.get(`/api/comentarios?entidade_tipo=projeto&entidade_id=${this.projId}`);
+          } catch (e) { alert(e.message); }
+        },
+
+        async recarregar() {
+          const p = await api.get(`/api/projetos/${this.projId}`);
+          this.proj = p;
+          this.tarefas = p.tarefas || [];
+        },
+
+        async alterarStatus(s) {
+          try {
+            await api.patch(`/api/projetos/${this.projId}`, { status: s });
+            this.proj.status = s;
+          } catch (e) { alert(e.message); }
+        },
+
+        async recalcular() {
+          try {
+            const r = await api.post(`/api/projetos/${this.projId}/recalcular`);
+            this.proj.progresso_pct = r.progresso_pct;
+          } catch (e) { alert(e.message); }
+        },
+
+        abrirFormTarefa() {
+          this.form = { aberto: true, titulo: '', descricao: '', prazo: '', prioridade: 'media' };
+        },
+
+        async salvarTarefa() {
+          if (!this.form.titulo.trim()) { alert('Titulo obrigatorio.'); return; }
+          try {
+            await api.post('/api/tarefas', {
+              projeto_id: this.projId,
+              titulo: this.form.titulo,
+              descricao: this.form.descricao,
+              prazo: this.form.prazo || null,
+              prioridade: this.form.prioridade,
+            });
+            this.form.aberto = false;
+            await this.recarregar();
+          } catch (e) { alert('Erro: ' + e.message); }
+        },
+
+        async updStatus(tarefaId, status) {
+          try {
+            await api.post(`/api/tarefas/${tarefaId}/status`, { status });
+            await this.recarregar();
+          } catch (e) { alert(e.message); }
+        },
+
+        async excluir(tarefaId) {
+          if (!confirm('Excluir tarefa?')) return;
+          try {
+            await api.delete(`/api/tarefas/${tarefaId}`);
+            await this.recarregar();
+          } catch (e) { alert(e.message); }
+        },
+
+        async postComentario() {
+          const txt = this.novoComentario.trim();
+          if (!txt) return;
+          try {
+            await api.post('/api/comentarios', {
+              entidade_tipo: 'projeto', entidade_id: this.projId, texto: txt,
+            });
+            this.novoComentario = '';
+            this.comentarios = await api.get(`/api/comentarios?entidade_tipo=projeto&entidade_id=${this.projId}`);
+          } catch (e) { alert(e.message); }
+        },
+      };
+    }
+  </script>
+</body>
+</html>
