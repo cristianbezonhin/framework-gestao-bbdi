@@ -5,11 +5,13 @@ Executado no startup do container (Dockerfile CMD chama `python -m scripts.seed`
 """
 from __future__ import annotations
 
+import os
+
 from config import DIRETOR_SENHA, SESSION_SECRET, SUPERVISOR_SENHA_DEFAULT
 from scripts.db import connect, init_db, now_iso
 from scripts.usuarios_db import criar as criar_usuario
 from scripts.usuarios_db import existe as usuario_existe
-from scripts.usuarios_db import hash_senha
+from scripts.usuarios_db import get_por_email, hash_senha
 
 SETORES_DEFAULT = [
     {"id": "comercial",  "nome": "Comercial",  "cor": "#0ea5e9", "template": "okr",      "ordem": 1},
@@ -50,35 +52,66 @@ def upsert_setores() -> int:
     return n
 
 
-def criar_usuarios_iniciais() -> int:
+def _senha_supervisor(setor_id: str) -> str:
+    """Le env var SUPERVISOR_SENHA_<SETOR> (uppercase). Fallback: SUPERVISOR_SENHA_DEFAULT."""
+    chave = f"SUPERVISOR_SENHA_{setor_id.upper()}"
+    return os.environ.get(chave) or SUPERVISOR_SENHA_DEFAULT
+
+
+def _atualizar_hash(email: str, novo_hash: str) -> bool:
+    """Atualiza senha apenas se o hash divergir do atual. Retorna True se alterou."""
+    user = get_por_email(email)
+    if not user or user.get("senha_hash") == novo_hash:
+        return False
+    with connect() as conn:
+        conn.execute(
+            "UPDATE usuarios SET senha_hash = ? WHERE id = ?",
+            (novo_hash, user["id"]),
+        )
+    return True
+
+
+def criar_usuarios_iniciais() -> tuple[int, int]:
+    """Cria usuarios inexistentes e sincroniza senhas dos existentes com as env vars."""
     criados = 0
+    atualizados = 0
+
+    diretor_hash = hash_senha(DIRETOR_SENHA, SESSION_SECRET)
     if not usuario_existe(DIRETOR["email"]):
         criar_usuario(
             email=DIRETOR["email"],
             nome=DIRETOR["nome"],
-            senha_hash=hash_senha(DIRETOR_SENHA, SESSION_SECRET),
+            senha_hash=diretor_hash,
             papel="diretor",
             setor_id=None,
         )
         criados += 1
+    elif _atualizar_hash(DIRETOR["email"], diretor_hash):
+        atualizados += 1
+
     for s in SUPERVISORES:
+        senha = _senha_supervisor(s["setor_id"])
+        novo_hash = hash_senha(senha, SESSION_SECRET)
         if not usuario_existe(s["email"]):
             criar_usuario(
                 email=s["email"],
                 nome=s["nome"],
-                senha_hash=hash_senha(SUPERVISOR_SENHA_DEFAULT, SESSION_SECRET),
+                senha_hash=novo_hash,
                 papel="supervisor",
                 setor_id=s["setor_id"],
             )
             criados += 1
-    return criados
+        elif _atualizar_hash(s["email"], novo_hash):
+            atualizados += 1
+
+    return criados, atualizados
 
 
 def run() -> None:
     init_db()
     n_setores = upsert_setores()
-    n_users = criar_usuarios_iniciais()
-    print(f"[seed] setores adicionados: {n_setores} | usuarios criados: {n_users}")
+    n_criados, n_atualizados = criar_usuarios_iniciais()
+    print(f"[seed] setores adicionados: {n_setores} | usuarios criados: {n_criados} | senhas sincronizadas: {n_atualizados}")
 
 
 if __name__ == "__main__":

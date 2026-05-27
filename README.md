@@ -23,8 +23,12 @@ Abrir `http://localhost:18090`.
 
 ## Login
 - Diretor: `cristian@bbdi.com.br` + `DIRETOR_SENHA`
-- Supervisores: `<setor>@bbdi.com.br` + `SUPERVISOR_SENHA_DEFAULT`
-  (setor = comercial, sac, financeiro, logistica, marketing, rma, rh)
+- Supervisores: `<setor>@bbdi.com.br`
+  - Senha individual via `SUPERVISOR_SENHA_<SETOR>` (ex: `SUPERVISOR_SENHA_COMERCIAL=xyz`)
+  - Fallback: `SUPERVISOR_SENHA_DEFAULT` se a variavel individual nao for setada
+  - Setores: comercial, sac, financeiro, logistica, marketing, rma, rh
+
+O seed roda no startup do container e **sincroniza as senhas com as env vars** (se voce trocar a env var e redeployar, a senha do usuario e atualizada para refletir).
 
 ## Templates de hierarquia
 Cada setor pode usar um dos 3 modelos (diretor configura em `/setor_config`):
