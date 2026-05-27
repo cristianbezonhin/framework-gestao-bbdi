@@ -31,8 +31,7 @@ async def login_submit(email: str = Form(...), senha: str = Form(...)):
     if not user:
         return RedirectResponse(url="/login?error=1", status_code=302)
     token = assinar_token(user["id"])
-    destino = "/diretor" if user["papel"] == "diretor" else f"/setor/{user['setor_id']}"
-    resp = RedirectResponse(url=destino, status_code=302)
+    resp = RedirectResponse(url="/app", status_code=302)
     resp.set_cookie(
         COOKIE_NAME, token,
         httponly=True, max_age=COOKIE_MAX_AGE, samesite="lax",

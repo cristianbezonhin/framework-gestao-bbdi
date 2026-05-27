@@ -15,6 +15,7 @@ def listar(
     setor_id: Optional[str] = None,
     status: Optional[str] = None,
     responsavel_id: Optional[int] = None,
+    periodo: Optional[str] = None,
 ) -> list[dict]:
     where = ["deletado_em IS NULL"]
     params: list = []
@@ -30,6 +31,21 @@ def listar(
     if responsavel_id is not None:
         where.append("responsavel_id = ?")
         params.append(responsavel_id)
+
+    # Filtro de periodo (Inbox UX). Sempre exclui feito/cancelado quando filtra.
+    if periodo == "hoje":
+        where.append("prazo IS NOT NULL AND date(prazo) <= date('now', 'localtime')")
+        where.append("status NOT IN ('feito', 'cancelado')")
+    elif periodo == "semana":
+        where.append("prazo IS NOT NULL AND date(prazo) <= date('now', '+7 days', 'localtime')")
+        where.append("status NOT IN ('feito', 'cancelado')")
+    elif periodo == "atrasadas":
+        where.append("prazo IS NOT NULL AND date(prazo) < date('now', 'localtime')")
+        where.append("status NOT IN ('feito', 'cancelado')")
+    elif periodo == "feitas":
+        where.append("status = 'feito'")
+    # "todas" ou None: sem filtro adicional
+
     sql = f"SELECT * FROM tarefas WHERE {' AND '.join(where)} ORDER BY prazo IS NULL, prazo, id"
     with connect() as conn:
         rows = conn.execute(sql, params).fetchall()

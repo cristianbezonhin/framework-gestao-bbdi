@@ -26,9 +26,15 @@ async def list_tarefas(
     projeto_id: Optional[int] = Query(None),
     setor: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
+    periodo: Optional[str] = Query(None),
 ):
     setor_efetivo = escopo_setor_para_user(user, setor)
-    return listar(projeto_id=projeto_id, setor_id=setor_efetivo, status=status)
+    return listar(
+        projeto_id=projeto_id,
+        setor_id=setor_efetivo,
+        status=status,
+        periodo=periodo,
+    )
 
 
 @router.get("/{tarefa_id}")
