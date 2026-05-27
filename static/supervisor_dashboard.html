@@ -13,7 +13,7 @@
   <header class="topbar">
     <div style="display:flex; align-items:center; gap:14px;">
       <h1 x-text="setor.nome || 'Setor'"></h1>
-      <span class="badge badge-warn" x-text="(setor.template || '').toUpperCase()"></span>
+      <span class="badge badge-warn" x-text="('default ' + (setor.template || '')).toUpperCase()" :title="'Framework padrao do setor (ainda assim os 3 estao liberados)'"></span>
     </div>
     <div style="display:flex; align-items:center; gap:14px;">
       <select class="input" style="width:auto;" x-model.number="ano" @change="carregar()">
@@ -35,15 +35,14 @@
 
   <main class="container">
 
+    <!-- KPIs -->
     <div class="card" style="padding:18px; margin-bottom:20px; display:grid; grid-template-columns:repeat(4, 1fr); gap:18px;">
       <div>
         <div class="kpi-label" style="font-size:11px; color:var(--text-dim); text-transform:uppercase;">Progresso medio</div>
         <div style="font-size:26px; font-weight:700;" x-text="(resumo.objetivos?.progresso_medio ?? 0) + '%'"></div>
       </div>
       <div>
-        <div class="kpi-label" style="font-size:11px; color:var(--text-dim); text-transform:uppercase;">
-          <span x-text="nivelLabelTopo() + 's'"></span>
-        </div>
+        <div class="kpi-label" style="font-size:11px; color:var(--text-dim); text-transform:uppercase;">Itens estrategicos</div>
         <div style="font-size:26px; font-weight:700;" x-text="resumo.objetivos?.total ?? 0"></div>
       </div>
       <div>
@@ -59,35 +58,61 @@
       </div>
     </div>
 
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-      <h2 style="margin:0; font-size:18px;" x-text="nivelLabelTopo() + 's do setor'"></h2>
-      <button class="btn btn-primary" @click="abrirFormNovo()">+ Novo <span x-text="nivelLabelTopo().toLowerCase()"></span></button>
+    <!-- Botoes de criacao (3 frameworks sempre disponiveis) -->
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:10px; flex-wrap:wrap;">
+      <h2 style="margin:0; font-size:18px;">Itens estrategicos do setor</h2>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn"
+                :class="setor.template === 'okr' ? 'btn-primary' : 'btn-ghost'"
+                @click="abrirForm('objetivo_anual')">+ OKR (Objetivo Anual)</button>
+        <button class="btn"
+                :class="setor.template === 'simples' ? 'btn-primary' : 'btn-ghost'"
+                @click="abrirForm('meta')">+ Meta</button>
+        <button class="btn"
+                :class="setor.template === 'desafios' ? 'btn-primary' : 'btn-ghost'"
+                @click="abrirForm('desafio')">+ Desafio</button>
+      </div>
     </div>
 
-    <div x-show="objetivos.length === 0" class="card" style="padding:32px; text-align:center;">
-      <p class="muted">Nenhum item ainda. Clique em "+ Novo" para comecar.</p>
-    </div>
+    <p class="muted" style="margin:0 0 14px 0; font-size:12px;">
+      Os 3 frameworks coexistem neste setor. O destacado ao lado ("default <span x-text="(setor.template||'').toUpperCase()"></span>") e so a sugestao inicial — voce pode misturar.
+    </p>
 
-    <div style="display:grid; gap:12px;">
-      <template x-for="o in objetivos" :key="o.id">
-        <div class="card" style="padding:16px;">
-          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
-            <div style="flex:1;">
-              <div style="display:flex; gap:8px; align-items:center; margin-bottom:4px;">
-                <span class="badge badge-neutral" x-text="NIVEL_LABEL[o.nivel]"></span>
-                <span :class="statusBadgeClass(o.status)" x-text="STATUS_LABEL[o.status]"></span>
-                <span class="faint" style="font-size:11px;" x-text="`${o.periodo_tipo} ${o.periodo_ano}${o.periodo_trimestre ? ' Q' + o.periodo_trimestre : ''}`"></span>
-              </div>
-              <a :href="`/objetivos/${o.id}`" style="font-size:15px; font-weight:600; color:var(--text);" x-text="o.titulo"></a>
-              <p class="muted" style="margin:6px 0 0 0; font-size:13px;" x-text="o.descricao"></p>
-            </div>
-            <div style="width:140px; text-align:right;">
-              <div style="font-size:20px; font-weight:700;" x-text="o.progresso_pct + '%'"></div>
-              <div class="progress" style="margin-top:6px;"><div class="progress-bar" :style="`width:${o.progresso_pct}%`"></div></div>
-            </div>
-          </div>
+    <!-- Lista agrupada por framework -->
+    <template x-for="grupo in gruposComItens" :key="grupo.nivel">
+      <div style="margin-bottom:22px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <h3 style="margin:0; font-size:14px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.5px;"
+              x-text="grupo.label"></h3>
+          <span class="badge badge-neutral" x-text="grupo.itens.length"></span>
         </div>
-      </template>
+        <div style="display:grid; gap:10px;">
+          <template x-for="o in grupo.itens" :key="o.id">
+            <div class="card" style="padding:14px;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+                <div style="flex:1;">
+                  <div style="display:flex; gap:6px; align-items:center; margin-bottom:4px;">
+                    <span class="badge badge-neutral" x-text="NIVEL_LABEL[o.nivel]"></span>
+                    <span :class="statusBadgeClass(o.status)" x-text="STATUS_LABEL[o.status]"></span>
+                    <span class="faint" style="font-size:11px;"
+                          x-text="`${o.periodo_tipo} ${o.periodo_ano}${o.periodo_trimestre ? ' Q' + o.periodo_trimestre : ''}`"></span>
+                  </div>
+                  <a :href="`/objetivos/${o.id}`" style="font-size:15px; font-weight:600; color:var(--text);" x-text="o.titulo"></a>
+                  <p class="muted" style="margin:6px 0 0 0; font-size:13px;" x-text="o.descricao"></p>
+                </div>
+                <div style="width:140px; text-align:right;">
+                  <div style="font-size:20px; font-weight:700;" x-text="o.progresso_pct + '%'"></div>
+                  <div class="progress" style="margin-top:6px;"><div class="progress-bar" :style="`width:${o.progresso_pct}%`"></div></div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </template>
+
+    <div x-show="gruposComItens.length === 0" class="card" style="padding:32px; text-align:center;">
+      <p class="muted">Nenhum item ainda. Clique num dos 3 botoes acima para comecar.</p>
     </div>
 
     <!-- Modal de criacao -->
@@ -95,15 +120,15 @@
          style="position:fixed; inset:0; background:rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:50;"
          @click.self="form.aberto = false">
       <div class="card" style="padding:24px; width:520px; max-width:90vw;">
-        <h3 style="margin:0 0 16px 0;" x-text="`Novo ${nivelLabelTopo().toLowerCase()}`"></h3>
+        <h3 style="margin:0 0 16px 0;" x-text="`Novo ${NIVEL_LABEL[form.nivel] || ''}`"></h3>
         <div style="display:grid; gap:12px;">
           <div>
             <label style="font-size:11px; color:var(--text-dim); text-transform:uppercase;">Titulo *</label>
-            <input class="input" x-model="form.titulo" placeholder="Ex: Reduzir CPP em 12%" />
+            <input class="input" x-model="form.titulo" :placeholder="placeholderTitulo()" />
           </div>
           <div>
             <label style="font-size:11px; color:var(--text-dim); text-transform:uppercase;">Descricao</label>
-            <textarea class="input" x-model="form.descricao" rows="3" placeholder="Por que esse objetivo importa?"></textarea>
+            <textarea class="input" x-model="form.descricao" rows="3" placeholder="Por que esse item importa?"></textarea>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
             <div>
@@ -148,6 +173,12 @@
   </main>
 
   <script>
+    const GRUPOS_TOPO = [
+      { nivel: 'objetivo_anual', label: 'OKR — Objetivos Anuais' },
+      { nivel: 'meta',           label: 'Metas (framework Simples)' },
+      { nivel: 'desafio',        label: 'Desafios Estrategicos' },
+    ];
+
     function dashSetor() {
       return {
         me: {},
@@ -155,26 +186,34 @@
         ano: anoAtual(),
         trimestre: trimestreAtual(),
         resumo: {},
-        objetivos: [],
-        form: { aberto: false, titulo: '', descricao: '', periodo_tipo: 'trimestral',
-                periodo_ano: anoAtual(), periodo_trimestre: trimestreAtual(),
+        itensPorNivel: { objetivo_anual: [], meta: [], desafio: [] },
+        form: { aberto: false, nivel: 'meta', titulo: '', descricao: '',
+                periodo_tipo: 'trimestral', periodo_ano: anoAtual(),
+                periodo_trimestre: trimestreAtual(),
                 meta_valor: null, meta_unidade: '' },
 
         get setorId() {
-          const parts = location.pathname.split('/');
-          return parts[2] || '';
+          return location.pathname.split('/')[2] || '';
         },
 
-        nivelLabelTopo() {
-          const map = { okr: 'Objetivo anual', simples: 'Meta', desafios: 'Desafio' };
-          return map[this.setor.template] || 'Objetivo';
+        get gruposComItens() {
+          return GRUPOS_TOPO
+            .map(g => ({ ...g, itens: this.itensPorNivel[g.nivel] || [] }))
+            .filter(g => g.itens.length > 0);
+        },
+
+        placeholderTitulo() {
+          return ({
+            objetivo_anual: 'Ex: Crescer GMV 30% em 2026',
+            meta: 'Ex: Reduzir CPP em 12% no Q2',
+            desafio: 'Ex: Tornar BBDI top 3 em NPS no segmento',
+          })[this.form.nivel] || '';
         },
 
         async init() {
           try { this.me = await api.get('/api/me'); } catch (_) {}
           try {
-            const setor = await api.get(`/api/setores/${this.setorId}`);
-            this.setor = setor;
+            this.setor = await api.get(`/api/setores/${this.setorId}`);
           } catch (e) { alert('Setor: ' + e.message); }
           await this.carregar();
         },
@@ -183,18 +222,23 @@
           try {
             const dash = await api.get(`/api/dashboard/setor/${this.setorId}?ano=${this.ano}&trimestre=${this.trimestre}`);
             this.resumo = dash.resumo;
-            const nivelTopo = { okr: 'objetivo_anual', simples: 'meta', desafios: 'desafio' }[this.setor.template] || 'meta';
-            this.objetivos = await api.get(`/api/objetivos?setor=${this.setorId}&nivel=${nivelTopo}&ano=${this.ano}`);
+            // Carregar os 3 niveis topo em paralelo
+            const niveis = ['objetivo_anual', 'meta', 'desafio'];
+            const listas = await Promise.all(niveis.map(n =>
+              api.get(`/api/objetivos?setor=${this.setorId}&nivel=${n}&ano=${this.ano}`)
+            ));
+            this.itensPorNivel = { objetivo_anual: listas[0], meta: listas[1], desafio: listas[2] };
           } catch (e) {
             console.error(e);
           }
         },
 
-        abrirFormNovo() {
+        abrirForm(nivel) {
           this.form = {
             aberto: true,
+            nivel,
             titulo: '', descricao: '',
-            periodo_tipo: 'trimestral',
+            periodo_tipo: nivel === 'objetivo_anual' ? 'anual' : 'trimestral',
             periodo_ano: this.ano,
             periodo_trimestre: this.trimestre,
             meta_valor: null, meta_unidade: '',
@@ -203,11 +247,10 @@
 
         async salvarNovo() {
           if (!this.form.titulo.trim()) { alert('Titulo obrigatorio.'); return; }
-          const nivelTopo = { okr: 'objetivo_anual', simples: 'meta', desafios: 'desafio' }[this.setor.template] || 'meta';
           try {
             await api.post('/api/objetivos', {
               setor_id: this.setorId,
-              nivel: nivelTopo,
+              nivel: this.form.nivel,
               titulo: this.form.titulo,
               descricao: this.form.descricao,
               periodo_tipo: this.form.periodo_tipo,

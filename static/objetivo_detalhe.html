@@ -143,10 +143,13 @@
   </div>
 
   <script>
-    const CADEIA_TEMPLATE = {
-      okr: ['objetivo_anual', 'key_result'],
-      simples: ['meta'],
-      desafios: ['desafio', 'meta'],
+    // Cada nivel pode receber 1 tipo de filho objetivo (estrutural, independe do setor):
+    //   objetivo_anual -> key_result
+    //   desafio -> meta
+    //   meta e key_result: nao tem filho objetivo, so projetos
+    const FILHO_NIVEL = {
+      objetivo_anual: 'key_result',
+      desafio: 'meta',
     };
 
     function objDetalhe() {
@@ -162,21 +165,17 @@
         get objId() { return parseInt(location.pathname.split('/').pop(), 10); },
 
         get aceitaFilhos() {
-          const cadeia = CADEIA_TEMPLATE[this.setor.template] || [];
-          const idx = cadeia.indexOf(this.obj.nivel);
-          return idx >= 0 && idx < cadeia.length - 1;
+          return !!FILHO_NIVEL[this.obj.nivel];
         },
 
         get ehNivelMaisBaixoDoTemplate() {
-          const cadeia = CADEIA_TEMPLATE[this.setor.template] || [];
-          return cadeia[cadeia.length - 1] === this.obj.nivel;
+          // Niveis que recebem projetos diretamente
+          return ['meta', 'key_result'].includes(this.obj.nivel);
         },
 
         labelFilho() {
-          if (!this.aceitaFilhos) return '';
-          const cadeia = CADEIA_TEMPLATE[this.setor.template] || [];
-          const idx = cadeia.indexOf(this.obj.nivel);
-          return NIVEL_LABEL[cadeia[idx + 1]];
+          const fn = FILHO_NIVEL[this.obj.nivel];
+          return fn ? NIVEL_LABEL[fn] : '';
         },
 
         async init() {
@@ -205,9 +204,8 @@
         },
 
         abrirFormFilho() {
-          const cadeia = CADEIA_TEMPLATE[this.setor.template] || [];
-          const idx = cadeia.indexOf(this.obj.nivel);
-          const filhoNivel = cadeia[idx + 1];
+          const filhoNivel = FILHO_NIVEL[this.obj.nivel];
+          if (!filhoNivel) return;
           this.form = {
             aberto: true, tipo: 'filho', filhoNivel,
             tituloModal: `Novo ${NIVEL_LABEL[filhoNivel]}`,

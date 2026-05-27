@@ -12,9 +12,8 @@ from scripts.objetivos_db import (
     get,
     get_com_filhos,
     listar,
-    nivel_topo,
     soft_delete,
-    validar_hierarquia,
+    validar_hierarquia_global,
 )
 from scripts.setores_db import get as get_setor
 
@@ -57,7 +56,8 @@ async def create_objetivo(
     if not setor:
         raise HTTPException(404, "Setor inexistente")
 
-    nivel = (payload.get("nivel") or "").strip() or nivel_topo(setor["template"])
+    # Os 3 frameworks coexistem em qualquer setor; o "template" do setor agora e apenas preferencia.
+    nivel = (payload.get("nivel") or "").strip() or "meta"
     parent_id = payload.get("parent_id")
     parent_nivel = None
     if parent_id is not None:
@@ -68,7 +68,7 @@ async def create_objetivo(
             raise HTTPException(400, "parent pertence a outro setor")
         parent_nivel = parent["nivel"]
 
-    erro = validar_hierarquia(setor["template"], nivel, parent_nivel)
+    erro = validar_hierarquia_global(nivel, parent_nivel)
     if erro:
         raise HTTPException(400, erro)
 

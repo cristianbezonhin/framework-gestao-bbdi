@@ -1,7 +1,8 @@
 """CRUD de objetivos (arvore unica com nivel + parent_id).
 
 Niveis possiveis: objetivo_anual | key_result | meta | desafio.
-Validacao de hierarquia segue o template do setor.
+Os 3 frameworks (OKR, Simples, Desafios) podem coexistir em qualquer setor.
+A validacao de hierarquia e global (estrutural), nao depende do template do setor.
 """
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ from typing import Optional
 
 from scripts.db import connect, now_iso, row_to_dict
 
-# Mapeamento template -> cadeia de niveis (do topo ate o nivel mais baixo de objetivo)
+# Mapeamento template -> cadeia de niveis (mantido como documentacao/preferencia padrao)
 TEMPLATES = {
     "okr": ["objetivo_anual", "key_result"],
     "simples": ["meta"],
@@ -17,6 +18,16 @@ TEMPLATES = {
 }
 
 NIVEIS_VALIDOS = {"objetivo_anual", "key_result", "meta", "desafio"}
+
+# Niveis que podem ser criados no topo (sem parent_id), agora em qualquer setor.
+NIVEIS_TOPO_PERMITIDOS = {"objetivo_anual", "meta", "desafio"}
+
+# Relacao filho -> parent_nivel obrigatorio.
+# Niveis ausentes daqui sao "topo" (parent_nivel deve ser None).
+PARENT_OBRIGATORIO = {
+    "key_result": "objetivo_anual",
+    "meta": "desafio",  # quando dentro do framework Desafios; ou pode ser topo (no Simples)
+}
 
 
 def niveis_do_template(template: str) -> list[str]:
@@ -27,22 +38,47 @@ def nivel_topo(template: str) -> str:
     return niveis_do_template(template)[0]
 
 
-def validar_hierarquia(template: str, nivel: str, parent_nivel: Optional[str]) -> Optional[str]:
-    """Retorna mensagem de erro ou None se OK."""
+def validar_hierarquia_global(nivel: str, parent_nivel: Optional[str]) -> Optional[str]:
+    """Validacao estrutural independente do template do setor.
+
+    Regras:
+    - objetivo_anual: sempre topo (parent_nivel deve ser None)
+    - desafio:        sempre topo
+    - meta:           pode ser topo (framework Simples) OU filha de desafio (framework Desafios)
+    - key_result:     deve ter parent objetivo_anual (framework OKR)
+    """
     if nivel not in NIVEIS_VALIDOS:
         return f"Nivel '{nivel}' invalido."
-    cadeia = niveis_do_template(template)
-    if nivel not in cadeia:
-        return f"Nivel '{nivel}' nao faz parte do template '{template}' (permitidos: {cadeia})."
-    idx = cadeia.index(nivel)
-    if idx == 0:
+
+    if nivel == "objetivo_anual":
         if parent_nivel is not None:
-            return f"Nivel '{nivel}' e topo do template '{template}' e nao deve ter parent."
-    else:
-        esperado = cadeia[idx - 1]
-        if parent_nivel != esperado:
-            return f"Nivel '{nivel}' deve ter parent de nivel '{esperado}' (recebido: {parent_nivel})."
-    return None
+            return "Objetivo Anual nao pode ter parent."
+        return None
+
+    if nivel == "desafio":
+        if parent_nivel is not None:
+            return "Desafio nao pode ter parent."
+        return None
+
+    if nivel == "meta":
+        if parent_nivel is None:
+            return None  # topo no framework Simples
+        if parent_nivel != "desafio":
+            return "Meta dentro de hierarquia precisa ser filha de Desafio."
+        return None
+
+    if nivel == "key_result":
+        if parent_nivel != "objetivo_anual":
+            return "Key Result precisa ser filho de Objetivo Anual."
+        return None
+
+    return f"Nivel '{nivel}' nao reconhecido."
+
+
+# Compat: alguns lugares ainda chamam validar_hierarquia(template, nivel, parent_nivel)
+def validar_hierarquia(template: str, nivel: str, parent_nivel: Optional[str]) -> Optional[str]:
+    """Compat: ignora template, delega para validacao global."""
+    return validar_hierarquia_global(nivel, parent_nivel)
 
 
 def listar(
