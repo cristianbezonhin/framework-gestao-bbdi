@@ -13,9 +13,27 @@ from scripts.objetivos_db import (
     get_com_filhos,
     listar,
     soft_delete,
+    trocar_nivel,
     validar_hierarquia_global,
 )
+from scripts.periodo import pct_tempo_decorrido, periodo_para_datas
 from scripts.setores_db import get as get_setor
+
+
+def _enriquecer(o: dict) -> dict:
+    if not o:
+        return o
+    if o.get("periodo_ano"):
+        di, df = periodo_para_datas(
+            o.get("periodo_tipo") or "trimestral",
+            o["periodo_ano"],
+            o.get("periodo_trimestre"),
+            o.get("periodo_mes"),
+        )
+        o["periodo_data_inicio"] = di
+        o["periodo_data_fim"] = df
+        o["tempo_decorrido_pct"] = pct_tempo_decorrido(di, df)
+    return o
 
 router = APIRouter(prefix="/api/objetivos", tags=["objetivos"])
 
@@ -29,7 +47,7 @@ async def list_objetivos(
     trimestre: Optional[int] = Query(None),
 ):
     setor_efetivo = escopo_setor_para_user(user, setor)
-    return listar(setor_id=setor_efetivo, nivel=nivel, ano=ano, trimestre=trimestre)
+    return [_enriquecer(o) for o in listar(setor_id=setor_efetivo, nivel=nivel, ano=ano, trimestre=trimestre)]
 
 
 @router.get("/{objetivo_id}")
@@ -39,6 +57,8 @@ async def get_objetivo(objetivo_id: int, user: dict = Depends(require_user)):
         raise HTTPException(404, "Objetivo nao encontrado")
     if not pode_acessar_setor(user, obj["setor_id"]):
         raise HTTPException(403, "Acesso negado")
+    _enriquecer(obj)
+    obj["filhos"] = [_enriquecer(f) for f in (obj.get("filhos") or [])]
     return obj
 
 
@@ -94,7 +114,7 @@ async def create_objetivo(
         responsavel_id=payload.get("responsavel_id"),
         template_origem=setor["template"],
     )
-    return get(obj_id)
+    return _enriquecer(get(obj_id))
 
 
 @router.patch("/{objetivo_id}")
@@ -110,7 +130,27 @@ async def update_objetivo(
         raise HTTPException(403, "Acesso negado")
     if not atualizar(objetivo_id, payload):
         raise HTTPException(400, "Nada para atualizar")
-    return get(objetivo_id)
+    return _enriquecer(get(objetivo_id))
+
+
+@router.post("/{objetivo_id}/nivel")
+async def alterar_nivel(
+    objetivo_id: int,
+    payload: dict = Body(...),
+    user: dict = Depends(require_user),
+):
+    obj = get(objetivo_id)
+    if not obj:
+        raise HTTPException(404, "Objetivo nao encontrado")
+    if not pode_acessar_setor(user, obj["setor_id"]):
+        raise HTTPException(403, "Acesso negado")
+    novo_nivel = (payload.get("nivel") or "").strip()
+    if not novo_nivel:
+        raise HTTPException(400, "nivel obrigatorio")
+    erro = trocar_nivel(objetivo_id, novo_nivel)
+    if erro:
+        raise HTTPException(400, erro)
+    return _enriquecer(get(objetivo_id))
 
 
 @router.post("/{objetivo_id}/progresso")
@@ -131,7 +171,7 @@ async def set_progresso(
     if "status" in payload:
         campos["status"] = payload["status"]
     atualizar(objetivo_id, campos)
-    return get(objetivo_id)
+    return _enriquecer(get(objetivo_id))
 
 
 @router.delete("/{objetivo_id}")

@@ -180,6 +180,67 @@ def criar(
         return cur.lastrowid
 
 
+def trocar_nivel(objetivo_id: int, novo_nivel: str) -> Optional[str]:
+    """Troca nivel de um objetivo. Retorna mensagem de erro ou None se OK.
+
+    Regras:
+    - Novo nivel deve ser valido.
+    - Se o objetivo tem filhos (sub-objetivos), nao pode mudar pra um nivel que nao aceita filhos do mesmo tipo.
+    - Se objetivo tem projetos vinculados diretamente, novo nivel deve ser folha (meta ou key_result).
+    """
+    if novo_nivel not in NIVEIS_VALIDOS:
+        return f"Nivel '{novo_nivel}' invalido."
+    with connect() as conn:
+        obj = conn.execute(
+            "SELECT * FROM objetivos WHERE id = ? AND deletado_em IS NULL", (objetivo_id,)
+        ).fetchone()
+        if not obj:
+            return "Objetivo nao encontrado."
+        if obj["nivel"] == novo_nivel:
+            return None  # nada a fazer
+
+        # Conta filhos objetivos e projetos
+        filhos = conn.execute(
+            "SELECT nivel FROM objetivos WHERE parent_id = ? AND deletado_em IS NULL",
+            (objetivo_id,),
+        ).fetchall()
+        n_projetos = conn.execute(
+            "SELECT COUNT(*) AS n FROM projetos WHERE objetivo_id = ? AND deletado_em IS NULL",
+            (objetivo_id,),
+        ).fetchone()["n"]
+
+        # Validacao do parent atual
+        parent_id = obj["parent_id"]
+        parent_nivel = None
+        if parent_id is not None:
+            parent = conn.execute(
+                "SELECT nivel FROM objetivos WHERE id = ?", (parent_id,)
+            ).fetchone()
+            parent_nivel = parent["nivel"] if parent else None
+
+        erro = validar_hierarquia_global(novo_nivel, parent_nivel)
+        if erro:
+            return f"Conversao bloqueada: {erro} (e preciso destacar do parent primeiro)"
+
+        # Regras de filhos
+        if filhos:
+            niveis_filhos = {f["nivel"] for f in filhos}
+            # novo_nivel precisa aceitar todos esses filhos
+            for nf in niveis_filhos:
+                if validar_hierarquia_global(nf, novo_nivel) is not None:
+                    return f"Conversao bloqueada: novo nivel '{novo_nivel}' nao aceita filhos do tipo '{nf}'."
+
+        # Regras de projetos: so meta e key_result podem ter projetos diretos
+        if n_projetos > 0 and novo_nivel not in ("meta", "key_result"):
+            return f"Conversao bloqueada: este item tem {n_projetos} projeto(s) vinculado(s) e '{novo_nivel}' nao pode receber projetos diretamente."
+
+        conn.execute(
+            "UPDATE objetivos SET nivel = ?, atualizado_em = ? WHERE id = ?",
+            (novo_nivel, now_iso(), objetivo_id),
+        )
+        return None
+
+
 def atualizar(objetivo_id: int, campos: dict) -> bool:
     permitidos = {
         "titulo", "descricao", "periodo_tipo", "periodo_ano", "periodo_trimestre",

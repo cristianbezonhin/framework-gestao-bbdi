@@ -48,6 +48,8 @@ def criar(
     descricao: str = "",
     status: str = "nao_iniciado",
     prazo: Optional[str] = None,
+    data_inicio: Optional[str] = None,
+    data_fim: Optional[str] = None,
     responsavel_id: Optional[int] = None,
 ) -> int:
     if status not in STATUS_PROJETO:
@@ -57,16 +59,17 @@ def criar(
         cur = conn.execute(
             """INSERT INTO projetos
                 (objetivo_id, setor_id, titulo, descricao, status, prazo,
+                 data_inicio, data_fim,
                  progresso_pct, responsavel_id, criado_em, atualizado_em)
-               VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)""",
             (objetivo_id, setor_id, titulo.strip(), descricao.strip(),
-             status, prazo, responsavel_id, ts, ts),
+             status, prazo, data_inicio, data_fim, responsavel_id, ts, ts),
         )
         return cur.lastrowid
 
 
 def atualizar(projeto_id: int, campos: dict) -> bool:
-    permitidos = {"titulo", "descricao", "status", "prazo", "progresso_pct", "responsavel_id"}
+    permitidos = {"titulo", "descricao", "status", "prazo", "data_inicio", "data_fim", "progresso_pct", "responsavel_id"}
     sets = []
     params: list = []
     for k, v in campos.items():

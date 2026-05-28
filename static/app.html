@@ -146,6 +146,52 @@
       font-size: 13px;
     }
 
+    /* Barra dupla: progresso real (laranja preenchido) + tempo decorrido (linha vertical) */
+    .barra-dupla {
+      position: relative; height: 10px; border-radius: 999px;
+      background: rgba(255,255,255,0.06); overflow: hidden;
+    }
+    .barra-dupla .bar-prog {
+      height: 100%;
+      background: linear-gradient(90deg, var(--amber-dark), var(--amber));
+      transition: width 0.3s ease;
+    }
+    .barra-dupla .marker-tempo {
+      position: absolute; top: -2px; bottom: -2px;
+      width: 2px; background: #fcd34d;
+      box-shadow: 0 0 4px rgba(252, 211, 77, 0.6);
+    }
+    .barra-dupla .marker-tempo::after {
+      content: '';
+      position: absolute; left: -3px; top: -4px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #fcd34d;
+    }
+    .legenda-barra {
+      display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim);
+      margin-top: 6px;
+    }
+    .legenda-barra .delta-positivo { color: #86efac; }
+    .legenda-barra .delta-negativo { color: #fca5a5; }
+
+    /* Campos do drawer */
+    .field { margin-bottom: 12px; }
+    .field-label {
+      display: block; font-size: 10px; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;
+    }
+    .field-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .section-title {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--text-dim); margin: 16px 0 8px 0; font-weight: 600;
+    }
+    .periodo-pill {
+      display: inline-block; padding: 2px 8px; border-radius: 6px;
+      background: rgba(252, 211, 77, 0.1); color: #fcd34d;
+      font-size: 11px; font-weight: 600;
+    }
+
     /* Responsivo */
     @media (max-width: 640px) {
       .drawer { width: 100vw; }
@@ -250,12 +296,17 @@
                   <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
                     <span class="badge badge-neutral" x-text="NIVEL_LABEL[o.nivel]"></span>
                     <span :class="statusBadgeClass(o.status)" x-text="STATUS_LABEL[o.status]"></span>
+                    <span class="periodo-pill" x-text="periodoExtenso(o)"></span>
                   </div>
                   <div style="font-weight:600; font-size:14px; margin-bottom:8px;" x-text="o.titulo"></div>
-                  <div class="progress"><div class="progress-bar" :style="`width:${o.progresso_pct}%`"></div></div>
-                  <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:11px; color:var(--text-dim);">
-                    <span x-text="o.periodo_tipo + ' ' + o.periodo_ano + (o.periodo_trimestre ? ' Q' + o.periodo_trimestre : '')"></span>
+                  <div class="barra-dupla">
+                    <div class="bar-prog" :style="`width:${o.progresso_pct}%`"></div>
+                    <div class="marker-tempo" x-show="o.tempo_decorrido_pct != null"
+                         :style="`left:${o.tempo_decorrido_pct}%`"></div>
+                  </div>
+                  <div class="legenda-barra">
                     <span x-text="o.progresso_pct + '%'"></span>
+                    <span :class="deltaTempoClass(o)" x-text="textoDeltaTempo(o)"></span>
                   </div>
                 </div>
               </template>
@@ -355,6 +406,7 @@
           <div style="display:flex; gap:6px; align-items:center;">
             <span class="badge badge-neutral" x-text="NIVEL_LABEL[drawer.objetivo.nivel]"></span>
             <span :class="statusBadgeClass(drawer.objetivo.status)" x-text="STATUS_LABEL[drawer.objetivo.status]"></span>
+            <span class="periodo-pill" x-text="periodoExtenso(drawer.objetivo)"></span>
           </div>
           <span class="x-btn" @click="fecharDrawer()">×</span>
         </div>
@@ -362,10 +414,95 @@
           <input class="input" style="font-size:16px; font-weight:600;" x-model="drawer.objetivo.titulo" @change="salvarObjetivo()" />
           <textarea class="input" rows="2" style="margin-top:8px;" x-model="drawer.objetivo.descricao" placeholder="Descricao" @change="salvarObjetivo()"></textarea>
 
-          <div style="margin-top:14px; display:flex; gap:12px; align-items:center;">
-            <input type="number" min="0" max="100" class="input" style="width:80px;" x-model.number="drawer.objetivo.progresso_pct" @change="salvarProgressoObj()" />
-            <div class="progress" style="flex:1;"><div class="progress-bar" :style="`width:${drawer.objetivo.progresso_pct}%`"></div></div>
-            <span x-text="drawer.objetivo.progresso_pct + '%'"></span>
+          <!-- Barra dupla: progresso real + marker tempo decorrido -->
+          <div style="margin-top:16px;">
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input type="number" min="0" max="100" class="input" style="width:70px;" x-model.number="drawer.objetivo.progresso_pct" @change="salvarProgressoObj()" />
+              <div class="barra-dupla" style="flex:1;">
+                <div class="bar-prog" :style="`width:${drawer.objetivo.progresso_pct}%`"></div>
+                <div class="marker-tempo" x-show="drawer.objetivo.tempo_decorrido_pct != null"
+                     :style="`left:${drawer.objetivo.tempo_decorrido_pct}%`"
+                     :title="`Tempo decorrido: ${drawer.objetivo.tempo_decorrido_pct}%`"></div>
+              </div>
+              <span style="font-weight:700;" x-text="drawer.objetivo.progresso_pct + '%'"></span>
+            </div>
+            <div class="legenda-barra" x-show="drawer.objetivo.tempo_decorrido_pct != null">
+              <span>Tempo decorrido: <strong x-text="drawer.objetivo.tempo_decorrido_pct + '%'"></strong></span>
+              <span :class="deltaTempoClass(drawer.objetivo)" x-text="textoDeltaTempo(drawer.objetivo)"></span>
+            </div>
+          </div>
+
+          <!-- Status + Nivel (conversao) -->
+          <div class="section-title">Tipo & Status</div>
+          <div class="field-grid-2">
+            <div class="field">
+              <label class="field-label">Tipo (framework)</label>
+              <select class="input" :value="drawer.objetivo.nivel" @change="trocarNivel($event.target.value)">
+                <option value="objetivo_anual">Objetivo Anual (OKR)</option>
+                <option value="meta">Meta (Simples)</option>
+                <option value="desafio">Desafio</option>
+                <option value="key_result" x-show="drawer.objetivo.nivel === 'key_result'">Key Result</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">Status</label>
+              <select class="input" x-model="drawer.objetivo.status" @change="salvarObjetivo()">
+                <option value="ativo">Ativo</option>
+                <option value="em_risco">Em risco</option>
+                <option value="concluido">Concluido</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Periodo -->
+          <div class="section-title">Periodo</div>
+          <div class="field-grid-3">
+            <div class="field">
+              <label class="field-label">Tipo</label>
+              <select class="input" x-model="drawer.objetivo.periodo_tipo" @change="salvarObjetivo()">
+                <option value="anual">Anual</option>
+                <option value="trimestral">Trimestral</option>
+                <option value="mensal">Mensal</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="field-label">Ano</label>
+              <input class="input" type="number" x-model.number="drawer.objetivo.periodo_ano" @change="salvarObjetivo()" />
+            </div>
+            <div class="field" x-show="drawer.objetivo.periodo_tipo === 'trimestral'">
+              <label class="field-label">Trimestre</label>
+              <select class="input" x-model.number="drawer.objetivo.periodo_trimestre" @change="salvarObjetivo()">
+                <option :value="1">Q1 (Jan-Mar)</option>
+                <option :value="2">Q2 (Abr-Jun)</option>
+                <option :value="3">Q3 (Jul-Set)</option>
+                <option :value="4">Q4 (Out-Dez)</option>
+              </select>
+            </div>
+            <div class="field" x-show="drawer.objetivo.periodo_tipo === 'mensal'">
+              <label class="field-label">Mes</label>
+              <select class="input" x-model.number="drawer.objetivo.periodo_mes" @change="salvarObjetivo()">
+                <template x-for="m in 12">
+                  <option :value="m" x-text="m"></option>
+                </template>
+              </select>
+            </div>
+          </div>
+          <div class="muted" style="font-size:11px;" x-show="drawer.objetivo.periodo_data_inicio">
+            De <span x-text="fmtDataCurta(drawer.objetivo.periodo_data_inicio)"></span> a <span x-text="fmtDataCurta(drawer.objetivo.periodo_data_fim)"></span>
+          </div>
+
+          <!-- Meta valor / unidade (quantitativo) -->
+          <div class="section-title">Meta quantitativa (opcional)</div>
+          <div class="field-grid-2">
+            <div class="field">
+              <label class="field-label">Valor alvo</label>
+              <input class="input" type="number" step="any" x-model="drawer.objetivo.meta_valor" placeholder="Ex: 30" @change="salvarObjetivo()" />
+            </div>
+            <div class="field">
+              <label class="field-label">Unidade</label>
+              <input class="input" x-model="drawer.objetivo.meta_unidade" placeholder="%, R$, un, leads..." @change="salvarObjetivo()" />
+            </div>
           </div>
 
           <div style="margin-top:18px;" x-show="drawer.filhos.length > 0">
@@ -437,9 +574,29 @@
           <input class="input" style="font-size:16px; font-weight:600;" x-model="drawer.projeto.titulo" @change="salvarProjeto()" />
           <textarea class="input" rows="2" style="margin-top:8px;" x-model="drawer.projeto.descricao" @change="salvarProjeto()"></textarea>
 
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
-            <div>
-              <label class="muted" style="font-size:11px;">Status</label>
+          <!-- Barra dupla: progresso real + marker tempo decorrido -->
+          <div style="margin-top:16px;">
+            <div style="display:flex; gap:12px; align-items:center;">
+              <input type="number" min="0" max="100" class="input" style="width:70px;" x-model.number="drawer.projeto.progresso_pct" @change="salvarProjeto()" />
+              <div class="barra-dupla" style="flex:1;">
+                <div class="bar-prog" :style="`width:${drawer.projeto.progresso_pct}%`"></div>
+                <div class="marker-tempo" x-show="drawer.projeto.tempo_decorrido_pct != null"
+                     :style="`left:${drawer.projeto.tempo_decorrido_pct}%`"
+                     :title="`Tempo decorrido: ${drawer.projeto.tempo_decorrido_pct}%`"></div>
+              </div>
+              <button class="btn btn-ghost" @click="recalcularProjeto()" title="Recalcular a partir das tarefas">↻</button>
+            </div>
+            <div class="legenda-barra" x-show="drawer.projeto.tempo_decorrido_pct != null">
+              <span>Tempo decorrido: <strong x-text="drawer.projeto.tempo_decorrido_pct + '%'"></strong></span>
+              <span :class="deltaTempoClass(drawer.projeto)" x-text="textoDeltaTempo(drawer.projeto)"></span>
+            </div>
+          </div>
+
+          <!-- Status + Prazo -->
+          <div class="section-title">Status & Datas</div>
+          <div class="field-grid-2">
+            <div class="field">
+              <label class="field-label">Status</label>
               <select class="input" x-model="drawer.projeto.status" @change="salvarProjeto()">
                 <option value="nao_iniciado">Nao iniciado</option>
                 <option value="em_andamento">Em andamento</option>
@@ -448,17 +605,21 @@
                 <option value="cancelado">Cancelado</option>
               </select>
             </div>
-            <div>
-              <label class="muted" style="font-size:11px;">Prazo</label>
+            <div class="field">
+              <label class="field-label">Prazo final (deadline)</label>
               <input class="input" type="date" :value="drawer.projeto.prazo ? drawer.projeto.prazo.substring(0,10) : ''"
                      @change="drawer.projeto.prazo = $event.target.value; salvarProjeto()" />
             </div>
-          </div>
-
-          <div style="margin-top:14px; display:flex; gap:12px; align-items:center;">
-            <input type="number" min="0" max="100" class="input" style="width:80px;" x-model.number="drawer.projeto.progresso_pct" @change="salvarProjeto()" />
-            <div class="progress" style="flex:1;"><div class="progress-bar" :style="`width:${drawer.projeto.progresso_pct}%`"></div></div>
-            <button class="btn btn-ghost" @click="recalcularProjeto()" title="Calcula com base nas tarefas">↻</button>
+            <div class="field">
+              <label class="field-label">Inicio</label>
+              <input class="input" type="date" :value="drawer.projeto.data_inicio ? drawer.projeto.data_inicio.substring(0,10) : ''"
+                     @change="drawer.projeto.data_inicio = $event.target.value; salvarProjeto()" />
+            </div>
+            <div class="field">
+              <label class="field-label">Fim previsto</label>
+              <input class="input" type="date" :value="drawer.projeto.data_fim ? drawer.projeto.data_fim.substring(0,10) : ''"
+                     @change="drawer.projeto.data_fim = $event.target.value; salvarProjeto()" />
+            </div>
           </div>
 
           <div style="margin-top:18px;">
@@ -719,6 +880,36 @@
           const s = this.setores.find(x => x.id === setor_id);
           return s ? s.nome : setor_id;
         },
+
+        // Periodo / tempo decorrido helpers
+        periodoExtenso(o) {
+          if (!o) return '';
+          const t = (o.periodo_tipo || '').toLowerCase();
+          if (t === 'anual') return `Ano ${o.periodo_ano || ''}`;
+          if (t === 'trimestral') return `Q${o.periodo_trimestre || '?'} ${o.periodo_ano || ''}`;
+          if (t === 'mensal') {
+            const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+            return `${meses[(o.periodo_mes||1)-1]}/${o.periodo_ano || ''}`;
+          }
+          return '';
+        },
+
+        deltaTempoClass(item) {
+          if (!item || item.tempo_decorrido_pct == null) return '';
+          const delta = (item.progresso_pct || 0) - item.tempo_decorrido_pct;
+          if (delta >= 5) return 'delta-positivo';
+          if (delta <= -10) return 'delta-negativo';
+          return '';
+        },
+
+        textoDeltaTempo(item) {
+          if (!item || item.tempo_decorrido_pct == null) return '';
+          const delta = (item.progresso_pct || 0) - item.tempo_decorrido_pct;
+          if (delta >= 5) return `Adiantado em ${delta}pp`;
+          if (delta <= -10) return `Atrasado em ${Math.abs(delta)}pp`;
+          if (delta < 0) return `Atras do tempo em ${Math.abs(delta)}pp`;
+          return 'No ritmo';
+        },
         ehAtrasada(t) {
           if (!t.prazo || ['feito','cancelado'].includes(t.status)) return false;
           return new Date(t.prazo.substring(0,10)) < new Date(new Date().toDateString());
@@ -817,9 +1008,37 @@
         async salvarObjetivo() {
           const o = this.drawer.objetivo;
           try {
-            await api.patch(`/api/objetivos/${o.id}`, { titulo: o.titulo, descricao: o.descricao });
+            const payload = {
+              titulo: o.titulo, descricao: o.descricao,
+              status: o.status,
+              periodo_tipo: o.periodo_tipo,
+              periodo_ano: o.periodo_ano,
+              periodo_trimestre: o.periodo_tipo === 'anual' ? null : o.periodo_trimestre,
+              periodo_mes: o.periodo_tipo === 'mensal' ? o.periodo_mes : null,
+              meta_valor: o.meta_valor === '' ? null : o.meta_valor,
+              meta_unidade: o.meta_unidade,
+            };
+            const atualizado = await api.patch(`/api/objetivos/${o.id}`, payload);
+            // re-sincroniza campos calculados (tempo_decorrido_pct, periodo_data_inicio)
+            this.drawer.objetivo = { ...o, ...atualizado };
             this.showToast('Salvo');
           } catch (e) { alert(e.message); }
+        },
+
+        async trocarNivel(novoNivel) {
+          const o = this.drawer.objetivo;
+          if (novoNivel === o.nivel) return;
+          if (!confirm(`Mudar de "${NIVEL_LABEL[o.nivel]}" para "${NIVEL_LABEL[novoNivel]}"?`)) return;
+          try {
+            const r = await api.post(`/api/objetivos/${o.id}/nivel`, { nivel: novoNivel });
+            this.drawer.objetivo = { ...o, ...r };
+            this.showToast('Tipo alterado para ' + NIVEL_LABEL[novoNivel]);
+            this.carregarObjetivos();
+          } catch (e) {
+            alert(e.message);
+            // forca re-render pra reverter o select
+            this.drawer.objetivo = { ...o };
+          }
         },
 
         async salvarProgressoObj() {
@@ -847,10 +1066,14 @@
         async salvarProjeto() {
           const p = this.drawer.projeto;
           try {
-            await api.patch(`/api/projetos/${p.id}`, {
+            const atualizado = await api.patch(`/api/projetos/${p.id}`, {
               titulo: p.titulo, descricao: p.descricao, status: p.status,
-              prazo: p.prazo || null, progresso_pct: p.progresso_pct,
+              prazo: p.prazo || null,
+              data_inicio: p.data_inicio || null,
+              data_fim: p.data_fim || null,
+              progresso_pct: p.progresso_pct,
             });
+            this.drawer.projeto = { ...p, ...atualizado };
             this.showToast('Salvo');
           } catch (e) { alert(e.message); }
         },

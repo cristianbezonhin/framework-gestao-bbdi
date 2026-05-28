@@ -45,6 +45,15 @@ def row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     return {k: row[k] for k in row.keys()}
 
 
+def _alter_idempotente(conn: sqlite3.Connection, sql: str) -> None:
+    """Roda ALTER TABLE ADD COLUMN ignorando se a coluna ja existe."""
+    try:
+        conn.execute(sql)
+    except sqlite3.OperationalError as e:
+        if "duplicate column name" not in str(e):
+            raise
+
+
 def init_db() -> None:
     with _lock:
         with _connect() as conn:
@@ -160,6 +169,9 @@ def init_db() -> None:
                 criado_em TEXT NOT NULL
             );
             """)
+            # Migracoes idempotentes (colunas adicionadas em versoes posteriores)
+            _alter_idempotente(conn, "ALTER TABLE projetos ADD COLUMN data_inicio TEXT")
+            _alter_idempotente(conn, "ALTER TABLE projetos ADD COLUMN data_fim TEXT")
 
 
 if __name__ == "__main__":
