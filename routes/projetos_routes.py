@@ -7,6 +7,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from auth import escopo_setor_para_user, pode_acessar_setor, require_user
 from scripts.objetivos_db import get as get_objetivo
+from scripts.objetivos_db import recalcular_progresso as recalcular_objetivo
 from scripts.periodo import pct_tempo_decorrido, periodo_para_datas
 from scripts.projetos_db import (
     atualizar,
@@ -94,6 +95,7 @@ async def create_projeto(
         data_fim=data_fim,
         responsavel_id=payload.get("responsavel_id"),
     )
+    recalcular_objetivo(objetivo_id)
     return _enriquecer(get(pid))
 
 
@@ -110,6 +112,8 @@ async def update_projeto(
         raise HTTPException(403, "Acesso negado")
     if not atualizar(projeto_id, payload):
         raise HTTPException(400, "Nada para atualizar")
+    # Mudanca de status (ex.: cancelado) ou progresso afeta a media do objetivo.
+    recalcular_objetivo(p["objetivo_id"])
     return _enriquecer(get(projeto_id))
 
 
@@ -132,4 +136,5 @@ async def delete_projeto(projeto_id: int, user: dict = Depends(require_user)):
     if not pode_acessar_setor(user, p["setor_id"]):
         raise HTTPException(403, "Acesso negado")
     soft_delete(projeto_id)
+    recalcular_objetivo(p["objetivo_id"])
     return {"ok": True}

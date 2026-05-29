@@ -1,14 +1,29 @@
 """Queries agregadas para dashboards."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
+from scripts.checkin_db import ultimos_todos
 from scripts.db import connect, row_to_dict
 
 
 def _hoje_iso() -> str:
     return date.today().isoformat()
+
+
+def _dias_desde(iso: Optional[str]) -> Optional[int]:
+    """Dias inteiros entre criado_em (UTC ISO) e agora. None se sem data."""
+    if not iso:
+        return None
+    try:
+        dt = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - dt
+    return max(0, delta.days)
 
 
 def resumo_setor(setor_id: str, ano: int, trimestre: Optional[int] = None) -> dict:
@@ -79,15 +94,26 @@ def resumo_setor(setor_id: str, ano: int, trimestre: Optional[int] = None) -> di
 
 
 def panorama_diretor(ano: int, trimestre: Optional[int] = None) -> list[dict]:
-    """Retorna resumo por setor para o dashboard do diretor."""
+    """Retorna resumo por setor para o dashboard do diretor.
+
+    Inclui o ultimo check-in de cada setor e quantos dias se passaram desde ele
+    (sinal de cadencia/velocidade), e um delta progresso-vs-tempo agregado.
+    """
     with connect() as conn:
         setores = conn.execute(
             "SELECT * FROM setores ORDER BY ordem, nome"
         ).fetchall()
+    checkins = ultimos_todos()
     out = []
     for s in setores:
         r = resumo_setor(s["id"], ano, trimestre)
         r["setor"] = row_to_dict(s)
+        ult = checkins.get(s["id"])
+        r["checkin"] = {
+            "ultimo": ult,
+            "dias_desde": _dias_desde(ult["criado_em"]) if ult else None,
+            "confidence": ult["confidence"] if ult else None,
+        }
         out.append(r)
     return out
 

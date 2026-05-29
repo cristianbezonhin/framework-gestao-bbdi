@@ -13,6 +13,7 @@ from scripts.objetivos_db import (
     get_com_filhos,
     ids_subarvore,
     listar,
+    recalcular_progresso,
     soft_delete,
     trocar_nivel,
     validar_hierarquia_global,
@@ -192,10 +193,24 @@ async def set_progresso(
     pct = payload.get("progresso_pct")
     if not isinstance(pct, int) or not (0 <= pct <= 100):
         raise HTTPException(400, "progresso_pct deve ser int 0-100")
-    campos = {"progresso_pct": pct}
+    # Digitar progresso a mao = override: vira modo manual para o rollup nao sobrescrever.
+    campos = {"progresso_pct": pct, "progresso_modo": "manual"}
     if "status" in payload:
         campos["status"] = payload["status"]
     atualizar(objetivo_id, campos)
+    return _enriquecer(get(objetivo_id))
+
+
+@router.post("/{objetivo_id}/recalcular")
+async def recalcular_objetivo(objetivo_id: int, user: dict = Depends(require_user)):
+    """Volta o objetivo para progresso automatico (rollup dos filhos)."""
+    obj = get(objetivo_id)
+    if not obj:
+        raise HTTPException(404, "Objetivo nao encontrado")
+    if not pode_acessar_setor(user, obj["setor_id"]):
+        raise HTTPException(403, "Acesso negado")
+    atualizar(objetivo_id, {"progresso_modo": "auto"})
+    recalcular_progresso(objetivo_id)
     return _enriquecer(get(objetivo_id))
 
 

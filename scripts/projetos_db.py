@@ -115,21 +115,34 @@ def soft_delete(projeto_id: int) -> bool:
 
 
 def recalcular_progresso(projeto_id: int) -> int:
-    """Recalcula progresso_pct = tarefas_concluidas / total ativas."""
+    """Recalcula progresso_pct = tarefas_concluidas / total ativas e propaga
+    para o objetivo pai (rollup).
+
+    Tarefas canceladas sao excluidas do denominador (nao contam como pendencia
+    nem como concluidas) -- antes derrubavam o % do projeto para sempre.
+    """
     with connect() as conn:
         row = conn.execute(
             """SELECT
                  COUNT(*) AS total,
                  SUM(CASE WHEN status = 'feito' THEN 1 ELSE 0 END) AS feitas
                FROM tarefas
-               WHERE projeto_id = ? AND deletado_em IS NULL""",
+               WHERE projeto_id = ? AND deletado_em IS NULL AND status != 'cancelado'""",
             (projeto_id,),
         ).fetchone()
         total = row["total"] or 0
         feitas = row["feitas"] or 0
         pct = 0 if total == 0 else round(100 * feitas / total)
+        proj = conn.execute(
+            "SELECT objetivo_id FROM projetos WHERE id = ?", (projeto_id,)
+        ).fetchone()
         conn.execute(
             "UPDATE projetos SET progresso_pct = ?, atualizado_em = ? WHERE id = ?",
             (pct, now_iso(), projeto_id),
         )
-        return pct
+    # Propaga para o objetivo apos o commit (leitura fresca no recalc do objetivo).
+    # Import local para evitar ciclo de import entre os modulos *_db.
+    if proj and proj["objetivo_id"] is not None:
+        from scripts.objetivos_db import recalcular_progresso as _recalc_objetivo
+        _recalc_objetivo(proj["objetivo_id"])
+    return pct

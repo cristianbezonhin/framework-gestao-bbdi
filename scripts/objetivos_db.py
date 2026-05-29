@@ -19,6 +19,12 @@ TEMPLATES = {
 
 NIVEIS_VALIDOS = {"objetivo_anual", "key_result", "meta", "desafio"}
 
+# Status validos de um objetivo (alinhado ao STATUS_LABEL do front em app.js).
+STATUS_OBJETIVO = {"ativo", "em_risco", "concluido", "cancelado"}
+
+# Modos de progresso: 'auto' = rollup dos filhos; 'manual' = override do diretor.
+PROGRESSO_MODOS = {"auto", "manual"}
+
 # Niveis que podem ser criados no topo (sem parent_id), agora em qualquer setor.
 NIVEIS_TOPO_PERMITIDOS = {"objetivo_anual", "meta", "desafio"}
 
@@ -189,15 +195,62 @@ def criar(
             """INSERT INTO objetivos
                 (setor_id, parent_id, nivel, titulo, descricao,
                  periodo_tipo, periodo_ano, periodo_trimestre, periodo_mes,
-                 meta_valor, meta_unidade, status, progresso_pct, responsavel_id,
-                 template_origem, criado_em, atualizado_em)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativo', 0, ?, ?, ?, ?)""",
+                 meta_valor, meta_unidade, status, progresso_pct, progresso_modo,
+                 responsavel_id, template_origem, criado_em, atualizado_em)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ativo', 0, 'auto', ?, ?, ?, ?)""",
             (setor_id, parent_id, nivel, titulo.strip(), descricao.strip(),
              periodo_tipo, periodo_ano, periodo_trimestre, periodo_mes,
              meta_valor, meta_unidade, responsavel_id,
              template_origem, ts, ts),
         )
-        return cur.lastrowid
+        novo_id = cur.lastrowid
+    # Um objetivo recem-criado entra na media do pai (progresso 0) -> repropaga.
+    if parent_id is not None:
+        recalcular_progresso(parent_id)
+    return novo_id
+
+
+def recalcular_progresso(objetivo_id: int) -> Optional[int]:
+    """Rollup: progresso do objetivo = media dos filhos diretos (projetos nao
+    cancelados + sub-objetivos), e propaga a mudanca para o pai.
+
+    - So sobrescreve progresso_pct se progresso_modo != 'manual' (preserva override).
+    - Mesmo em modo manual, propaga para o pai (o pai pode estar em auto).
+    - Sem filhos: nao mexe (deixa o valor atual; ex.: meta-folha sem projetos).
+
+    Retorna o novo progresso_pct (ou None se nada recalculado).
+    """
+    novo: Optional[int] = None
+    with connect() as conn:
+        obj = conn.execute(
+            "SELECT parent_id, progresso_modo FROM objetivos "
+            "WHERE id = ? AND deletado_em IS NULL",
+            (objetivo_id,),
+        ).fetchone()
+        if not obj:
+            return None
+        parent_id = obj["parent_id"]
+        projetos = conn.execute(
+            "SELECT progresso_pct FROM projetos "
+            "WHERE objetivo_id = ? AND deletado_em IS NULL AND status != 'cancelado'",
+            (objetivo_id,),
+        ).fetchall()
+        subobjetivos = conn.execute(
+            "SELECT progresso_pct FROM objetivos "
+            "WHERE parent_id = ? AND deletado_em IS NULL",
+            (objetivo_id,),
+        ).fetchall()
+        valores = [r["progresso_pct"] for r in projetos] + [r["progresso_pct"] for r in subobjetivos]
+        if valores and obj["progresso_modo"] != "manual":
+            novo = round(sum(valores) / len(valores))
+            conn.execute(
+                "UPDATE objetivos SET progresso_pct = ?, atualizado_em = ? WHERE id = ?",
+                (novo, now_iso(), objetivo_id),
+            )
+    # Propaga para cima apos o commit (leitura fresca em cada nivel).
+    if parent_id is not None:
+        recalcular_progresso(parent_id)
+    return novo
 
 
 def trocar_nivel(objetivo_id: int, novo_nivel: str) -> Optional[str]:
@@ -265,11 +318,15 @@ def atualizar(objetivo_id: int, campos: dict) -> bool:
     permitidos = {
         "titulo", "descricao", "periodo_tipo", "periodo_ano", "periodo_trimestre",
         "periodo_mes", "meta_valor", "meta_unidade", "status", "progresso_pct",
-        "responsavel_id",
+        "progresso_modo", "responsavel_id",
     }
     sets = []
     params: list = []
     for k, v in campos.items():
+        if k == "status" and v not in STATUS_OBJETIVO:
+            continue
+        if k == "progresso_modo" and v not in PROGRESSO_MODOS:
+            continue
         if k in permitidos:
             sets.append(f"{k} = ?")
             params.append(v)
