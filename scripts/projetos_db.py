@@ -31,6 +31,20 @@ def listar(
         return [row_to_dict(r) for r in rows]
 
 
+def listar_por_objetivos(objetivo_ids: list[int]) -> list[dict]:
+    """Todos os projetos vinculados a qualquer objetivo da lista (ex.: subarvore)."""
+    if not objetivo_ids:
+        return []
+    placeholders = ",".join("?" * len(objetivo_ids))
+    sql = (
+        f"SELECT * FROM projetos WHERE objetivo_id IN ({placeholders}) "
+        "AND deletado_em IS NULL ORDER BY prazo IS NULL, prazo, id"
+    )
+    with connect() as conn:
+        rows = conn.execute(sql, objetivo_ids).fetchall()
+        return [row_to_dict(r) for r in rows]
+
+
 def get(projeto_id: int) -> Optional[dict]:
     with connect() as conn:
         row = conn.execute(

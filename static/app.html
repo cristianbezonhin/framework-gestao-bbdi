@@ -138,6 +138,43 @@
     }
     .obj-card:hover { border-color: var(--border-amber); transform: translateY(-1px); }
 
+    /* Cascata: vista do objetivo em 3 camadas (Objetivo -> Projetos -> Tarefas) */
+    .cascata-page {
+      position: fixed; inset: 0; z-index: 25;
+      background: var(--bg);
+      background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(180, 83, 9, 0.12) 0%, transparent 70%);
+      overflow-y: auto;
+    }
+    .cascata-topbar {
+      position: sticky; top: 0; z-index: 2;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px; border-bottom: 1px solid var(--border);
+      background: rgba(10, 15, 28, 0.92); backdrop-filter: blur(8px);
+    }
+    .cascata-body { max-width: 920px; margin: 0 auto; padding: 22px 22px 120px; }
+    .camada {
+      position: relative; border-left: 2px solid var(--border-amber);
+      padding-left: 18px; margin-bottom: 26px;
+    }
+    .camada::before {
+      content: ''; position: absolute; left: -7px; top: 2px;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--amber); box-shadow: 0 0 8px rgba(217, 119, 6, 0.5);
+    }
+    .camada-label {
+      font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: #fcd34d; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .camada-label .cnt { color: var(--text-dim); font-weight: 600; }
+    .obj-headline { padding: 18px; }
+    .obj-headline h2 { margin: 8px 0; font-size: 22px; }
+    .cascata-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+    .empty-camada { color: var(--text-dim); font-size: 13px; padding: 8px 0; }
+    @media (max-width: 640px) {
+      .cascata-body { padding: 16px 12px 120px; }
+      .camada { padding-left: 14px; }
+    }
+
     /* Comentarios */
     .com-item {
       background: rgba(255,255,255,0.03);
@@ -292,7 +329,7 @@
             </h3>
             <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:10px;">
               <template x-for="o in objsBySetor(s.id)" :key="o.id">
-                <div class="obj-card" @click="abrirDrawerObjetivo(o.id)">
+                <div class="obj-card" @click="abrirCascata(o.id)">
                   <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
                     <span class="badge badge-neutral" x-text="NIVEL_LABEL[o.nivel]"></span>
                     <span :class="statusBadgeClass(o.status)" x-text="STATUS_LABEL[o.status]"></span>
@@ -341,6 +378,88 @@
     </section>
 
   </main>
+
+  <!-- ============ CASCATA: objetivo em 3 camadas ============ -->
+  <div class="cascata-page" x-show="cascata.aberto" x-cloak>
+    <div class="cascata-topbar">
+      <button class="btn btn-ghost" @click="fecharCascata()">← Voltar</button>
+      <div style="flex:1; min-width:0; display:flex; gap:8px; align-items:center;">
+        <span class="badge badge-neutral" x-text="NIVEL_LABEL[cascata.objetivo.nivel]"></span>
+        <span style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" x-text="cascata.objetivo.titulo"></span>
+      </div>
+      <button class="btn btn-ghost" @click="abrirDrawerObjetivo(cascata.objetivo.id)">Editar</button>
+    </div>
+
+    <div class="cascata-body">
+      <!-- Camada 1: OBJETIVO -->
+      <section class="camada">
+        <div class="camada-label">Objetivo</div>
+        <div class="card obj-headline">
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <span class="badge badge-neutral" x-text="NIVEL_LABEL[cascata.objetivo.nivel]"></span>
+            <span :class="statusBadgeClass(cascata.objetivo.status)" x-text="STATUS_LABEL[cascata.objetivo.status]"></span>
+            <span class="periodo-pill" x-text="periodoExtenso(cascata.objetivo)"></span>
+            <span class="badge badge-neutral" x-text="setorNome(cascata.objetivo.setor_id)"></span>
+          </div>
+          <h2 x-text="cascata.objetivo.titulo"></h2>
+          <p class="muted" style="margin:0 0 12px 0; font-size:13px; white-space:pre-wrap;" x-show="cascata.objetivo.descricao" x-text="cascata.objetivo.descricao"></p>
+          <div class="barra-dupla">
+            <div class="bar-prog" :style="`width:${cascata.objetivo.progresso_pct}%`"></div>
+            <div class="marker-tempo" x-show="cascata.objetivo.tempo_decorrido_pct != null"
+                 :style="`left:${cascata.objetivo.tempo_decorrido_pct}%`"></div>
+          </div>
+          <div class="legenda-barra">
+            <span x-text="cascata.objetivo.progresso_pct + '%'"></span>
+            <span :class="deltaTempoClass(cascata.objetivo)" x-text="textoDeltaTempo(cascata.objetivo)"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Camada 2: PROJETOS -->
+      <section class="camada">
+        <div class="camada-label">Projetos <span class="cnt" x-text="`(${cascata.projetos.length})`"></span></div>
+        <div class="cascata-grid">
+          <template x-for="p in cascata.projetos" :key="p.id">
+            <div class="obj-card" @click="abrirDrawerProjeto(p.id)">
+              <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+                <span :class="statusBadgeClass(p.status)" x-text="STATUS_LABEL[p.status]"></span>
+                <span class="muted" style="font-size:11px;" x-show="p.prazo" x-text="fmtDataCurta(p.prazo)"></span>
+              </div>
+              <div style="font-weight:600; font-size:14px; margin-bottom:8px;" x-text="p.titulo"></div>
+              <div class="barra-dupla">
+                <div class="bar-prog" :style="`width:${p.progresso_pct}%`"></div>
+                <div class="marker-tempo" x-show="p.tempo_decorrido_pct != null" :style="`left:${p.tempo_decorrido_pct}%`"></div>
+              </div>
+              <div class="legenda-barra"><span x-text="p.progresso_pct + '%'"></span></div>
+            </div>
+          </template>
+        </div>
+        <div class="empty-camada" x-show="cascata.projetos.length === 0">Nenhum projeto ligado a este objetivo ainda.</div>
+      </section>
+
+      <!-- Camada 3: TAREFAS -->
+      <section class="camada">
+        <div class="camada-label">Tarefas <span class="cnt" x-text="`(${cascata.tarefas.length})`"></span></div>
+        <div style="display:grid; gap:8px;">
+          <template x-for="t in cascata.tarefas" :key="t.id">
+            <div class="tarefa-item" :class="{feita: t.status === 'feito'}" @click="abrirDrawerTarefa(t.id)">
+              <div class="check" :class="{feita: t.status === 'feito'}" @click.stop="toggleTarefaCascata(t)"></div>
+              <div style="flex:1; min-width:0;">
+                <div class="titulo" style="font-weight:600; font-size:14px;" x-text="t.titulo"></div>
+                <div class="tarefa-meta">
+                  <span class="pill" x-show="t.projeto_titulo" x-text="t.projeto_titulo"></span>
+                  <span class="pill" :class="{alta: t.prioridade === 'alta', baixa: t.prioridade === 'baixa'}" x-text="t.prioridade"></span>
+                  <span class="pill" x-show="t.prazo" :class="{atrasada: ehAtrasada(t)}"
+                        x-text="(ehAtrasada(t) ? 'Atrasada • ' : '') + fmtDataCurta(t.prazo)"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="empty-camada" x-show="cascata.tarefas.length === 0">Nenhuma tarefa nos projetos deste objetivo.</div>
+      </section>
+    </div>
+  </div>
 
   <!-- FAB Criar -->
   <button class="fab" @click="abrirModalCriar('tarefa')" title="Criar (T=Tarefa, P=Projeto, M=Meta, O=OKR, D=Desafio)">+</button>
@@ -806,6 +925,9 @@
         // Drawer
         drawer: { aberto:false, tipo:'', tarefa:{}, objetivo:{}, projeto:{}, filhos:[], projetos:[], tarefas:[], comentarios:[], novoComentario:'', aceitaProjetos:false },
 
+        // Cascata (vista do objetivo em 3 camadas)
+        cascata: { aberto:false, objetivo:{}, projetos:[], tarefas:[] },
+
         // Modal criar
         modal: { aberto:false, tipo:'tarefa', titulo:'', descricao:'', setor_id:'', projeto_id:null, objetivo_id:null, parent_id:null, prazo:'', prioridade:'media', periodo_tipo:'trimestral', periodo_ano:anoAtual(), periodo_trimestre:trimestreAtual() },
 
@@ -986,7 +1108,42 @@
           } catch (e) { alert(e.message); }
         },
 
-        fecharDrawer() { this.drawer.aberto = false; this.carregarTarefas(); this.carregarObjetivos(); this.carregarProjetos(); },
+        fecharDrawer() { this.drawer.aberto = false; this.carregarTarefas(); this.carregarObjetivos(); this.carregarProjetos(); this.recarregarCascata(); },
+
+        // ============ Cascata (3 camadas) ============
+        async abrirCascata(id) {
+          this.cascata = { aberto:true, objetivo:{}, projetos:[], tarefas:[] };
+          try {
+            const r = await api.get(`/api/objetivos/${id}/cascata`);
+            this.cascata.objetivo = r.objetivo;
+            this.cascata.projetos = r.projetos;
+            this.cascata.tarefas = r.tarefas;
+          } catch (e) { alert(e.message); this.cascata.aberto = false; }
+        },
+
+        fecharCascata() { this.cascata.aberto = false; this.carregarObjetivos(); },
+
+        async recarregarCascata() {
+          if (!this.cascata.aberto || !this.cascata.objetivo.id) return;
+          try {
+            const r = await api.get(`/api/objetivos/${this.cascata.objetivo.id}/cascata`);
+            this.cascata.objetivo = r.objetivo;
+            this.cascata.projetos = r.projetos;
+            this.cascata.tarefas = r.tarefas;
+          } catch (e) {
+            if (String(e.message).includes('404')) this.cascata.aberto = false;
+          }
+        },
+
+        async toggleTarefaCascata(t) {
+          const novo = t.status === 'feito' ? 'a_fazer' : 'feito';
+          try {
+            await api.post(`/api/tarefas/${t.id}/status`, { status: novo });
+            t.status = novo;
+            this.showToast(novo === 'feito' ? 'Tarefa feita ✓' : 'Reaberta');
+            this.recarregarCascata();
+          } catch (e) { alert(e.message); }
+        },
 
         async salvarTarefa() {
           const t = this.drawer.tarefa;

@@ -52,6 +52,20 @@ def listar(
         return [row_to_dict(r) for r in rows]
 
 
+def listar_por_projetos(projeto_ids: list[int]) -> list[dict]:
+    """Todas as tarefas dos projetos da lista. Nao concluidas primeiro."""
+    if not projeto_ids:
+        return []
+    placeholders = ",".join("?" * len(projeto_ids))
+    sql = (
+        f"SELECT * FROM tarefas WHERE projeto_id IN ({placeholders}) "
+        "AND deletado_em IS NULL ORDER BY status = 'feito', prazo IS NULL, prazo, id"
+    )
+    with connect() as conn:
+        rows = conn.execute(sql, projeto_ids).fetchall()
+        return [row_to_dict(r) for r in rows]
+
+
 def get(tarefa_id: int) -> Optional[dict]:
     with connect() as conn:
         row = conn.execute(

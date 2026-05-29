@@ -147,6 +147,26 @@ def get_com_filhos(objetivo_id: int) -> Optional[dict]:
     return obj
 
 
+def ids_subarvore(objetivo_id: int) -> list[int]:
+    """Retorna [objetivo_id] + todos os descendentes (filhos, netos, ...) nao deletados.
+
+    Usado para reunir tudo que "envolve" um objetivo (projetos das metas/KRs filhas etc.).
+    """
+    ids = [objetivo_id]
+    fila = [objetivo_id]
+    with connect() as conn:
+        while fila:
+            atual = fila.pop()
+            filhos = conn.execute(
+                "SELECT id FROM objetivos WHERE parent_id = ? AND deletado_em IS NULL",
+                (atual,),
+            ).fetchall()
+            for f in filhos:
+                ids.append(f["id"])
+                fila.append(f["id"])
+    return ids
+
+
 def criar(
     *,
     setor_id: str,
