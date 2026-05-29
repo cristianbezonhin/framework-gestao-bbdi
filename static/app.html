@@ -130,6 +130,49 @@
     }
     .fab:hover { transform: scale(1.05); }
 
+    /* Panorama (diretor): cards comparaveis de setor */
+    .panorama-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 14px;
+    }
+    .setor-card {
+      padding: 16px; cursor: pointer;
+      border-left: 3px solid var(--setor-cor, var(--amber));
+      transition: transform 0.15s, border-color 0.2s;
+    }
+    .setor-card:hover { transform: translateY(-2px); border-color: var(--border-amber); }
+    .setor-card.pior {
+      border-color: rgba(239, 68, 68, 0.45);
+      box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25), 0 6px 18px rgba(239, 68, 68, 0.12);
+    }
+    .setor-card h3 { margin: 0; font-size: 15px; }
+    .setor-card .skpis { display: flex; gap: 12px; margin-top: 12px; }
+    .setor-card .skpi { flex: 1; }
+    .setor-card .skpi-val { font-size: 20px; font-weight: 700; color: var(--text); }
+    .setor-card .skpi-label { color: var(--text-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    /* Dot RAG de confidence */
+    .rag-dot {
+      width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+      background: var(--text-faint); display: inline-block;
+    }
+    .rag-dot.verde { background: var(--ok); box-shadow: 0 0 6px rgba(34,197,94,0.5); }
+    .rag-dot.amarelo { background: var(--warn); box-shadow: 0 0 6px rgba(245,158,11,0.5); }
+    .rag-dot.vermelho { background: var(--err); box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+    /* Botoes RAG no modal de check-in */
+    .rag-pick { display: flex; gap: 8px; }
+    .rag-opt {
+      flex: 1; padding: 10px; border-radius: 10px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--bg-card);
+      color: var(--text-dim); font-size: 12px; font-weight: 600; text-align: center;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      transition: all 0.15s;
+    }
+    .rag-opt:hover { border-color: var(--border-amber); color: var(--text); }
+    .rag-opt.sel.verde { border-color: var(--ok); color: #86efac; background: rgba(34,197,94,0.12); }
+    .rag-opt.sel.amarelo { border-color: var(--warn); color: #fcd34d; background: rgba(245,158,11,0.12); }
+    .rag-opt.sel.vermelho { border-color: var(--err); color: #fca5a5; background: rgba(239,68,68,0.12); }
+
     /* Cards de objetivos */
     .obj-card {
       background: var(--bg-card); border: 1px solid var(--border);
@@ -137,6 +180,43 @@
       transition: border-color 0.15s, transform 0.1s;
     }
     .obj-card:hover { border-color: var(--border-amber); transform: translateY(-1px); }
+
+    /* Cascata: vista do objetivo em 3 camadas (Objetivo -> Projetos -> Tarefas) */
+    .cascata-page {
+      position: fixed; inset: 0; z-index: 25;
+      background: var(--bg);
+      background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(180, 83, 9, 0.12) 0%, transparent 70%);
+      overflow-y: auto;
+    }
+    .cascata-topbar {
+      position: sticky; top: 0; z-index: 2;
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px; border-bottom: 1px solid var(--border);
+      background: rgba(10, 15, 28, 0.92); backdrop-filter: blur(8px);
+    }
+    .cascata-body { max-width: 920px; margin: 0 auto; padding: 22px 22px 120px; }
+    .camada {
+      position: relative; border-left: 2px solid var(--border-amber);
+      padding-left: 18px; margin-bottom: 26px;
+    }
+    .camada::before {
+      content: ''; position: absolute; left: -7px; top: 2px;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--amber); box-shadow: 0 0 8px rgba(217, 119, 6, 0.5);
+    }
+    .camada-label {
+      font-size: 12px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+      color: #fcd34d; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+    }
+    .camada-label .cnt { color: var(--text-dim); font-weight: 600; }
+    .obj-headline { padding: 18px; }
+    .obj-headline h2 { margin: 8px 0; font-size: 22px; }
+    .cascata-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+    .empty-camada { color: var(--text-dim); font-size: 13px; padding: 8px 0; }
+    @media (max-width: 640px) {
+      .cascata-body { padding: 16px 12px 120px; }
+      .camada { padding-left: 14px; }
+    }
 
     /* Comentarios */
     .com-item {
@@ -210,6 +290,7 @@
         <span class="badge badge-neutral" x-show="me.setor" x-text="(me.setor?.nome || '')"></span>
       </div>
       <div style="display:flex; align-items:center; gap:12px;">
+        <button x-show="me.papel === 'supervisor'" class="btn btn-primary" @click="abrirCheckin()">Check-in da semana</button>
         <span class="user-tag" x-text="me.nome"></span>
         <a href="/logout" class="btn btn-ghost">Sair</a>
       </div>
@@ -217,12 +298,85 @@
   </header>
 
   <nav class="tabs">
+    <div class="tab" :class="{active: tab === 'panorama'}" x-show="me.papel === 'diretor'" @click="setTab('panorama')">Panorama</div>
     <div class="tab" :class="{active: tab === 'tarefas'}" @click="setTab('tarefas')">Tarefas</div>
     <div class="tab" :class="{active: tab === 'objetivos'}" @click="setTab('objetivos')">Objetivos & Metas</div>
     <div class="tab" :class="{active: tab === 'config'}" x-show="me.papel === 'diretor'" @click="setTab('config')">Config</div>
   </nav>
 
   <main class="container">
+
+    <!-- ABA PANORAMA (so diretor, default dele) -->
+    <section x-show="tab === 'panorama'" x-cloak>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap;">
+        <div>
+          <h2 style="margin:0; font-size:20px;">Velocidade por setor</h2>
+          <p class="muted" style="margin:4px 0 0 0; font-size:13px;">
+            Ordenado do mais atrasado pro mais adiantado. Clique num setor pra ver o ultimo check-in.
+          </p>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <select class="input" style="width:auto;" x-model.number="panoramaAno" @change="carregarPanorama()">
+            <template x-for="a in [anoAtual(), anoAtual() - 1, anoAtual() + 1]">
+              <option :value="a" x-text="a"></option>
+            </template>
+          </select>
+          <select class="input" style="width:auto;" x-model.number="panoramaTri" @change="carregarPanorama()">
+            <option :value="1">Q1 (Jan-Mar)</option>
+            <option :value="2">Q2 (Abr-Jun)</option>
+            <option :value="3">Q3 (Jul-Set)</option>
+            <option :value="4">Q4 (Out-Dez)</option>
+          </select>
+          <span class="muted" style="font-size:12px;" x-show="panoramaLoading">Carregando...</span>
+        </div>
+      </div>
+
+      <div class="panorama-grid" x-show="!panoramaLoading">
+        <template x-for="(s, i) in panoramaOrdenado" :key="s.setor.id">
+          <div class="card setor-card" :class="{pior: i === 0 && piorEmRisco(s)}"
+               :style="`--setor-cor: ${s.setor.cor}`" @click="verCheckinSetor(s)">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+                <span class="rag-dot" :class="s.checkin?.confidence || ''"
+                      :title="ragTitulo(s.checkin?.confidence)"></span>
+                <h3 x-text="s.setor.nome"></h3>
+              </div>
+              <span class="badge badge-neutral" x-text="(s.setor.template || '').toUpperCase()"></span>
+            </div>
+
+            <div class="barra-dupla" style="margin-top:14px;">
+              <div class="bar-prog" :style="`width:${s.objetivos.progresso_medio}%`"></div>
+            </div>
+
+            <div class="skpis">
+              <div class="skpi">
+                <div class="skpi-val" x-text="s.objetivos.progresso_medio + '%'"></div>
+                <div class="skpi-label">progresso medio</div>
+              </div>
+              <div class="skpi">
+                <div class="skpi-val" x-text="s.objetivos.total"></div>
+                <div class="skpi-label" x-text="nivelLabelTopo(s.setor.template).toLowerCase() + 's'"></div>
+              </div>
+              <div class="skpi">
+                <div class="skpi-val" :style="s.projetos.atrasados > 0 ? 'color:#fca5a5' : ''" x-text="s.projetos.atrasados"></div>
+                <div class="skpi-label">proj. atrasados</div>
+              </div>
+            </div>
+
+            <div style="margin-top:12px; display:flex; gap:8px; align-items:center; font-size:11px; color:var(--text-dim); flex-wrap:wrap;">
+              <span x-text="`${s.tarefas.feitas}/${s.tarefas.total} tarefas feitas`"></span>
+              <span x-show="s.objetivos.em_risco > 0" class="badge badge-err"
+                    x-text="`${s.objetivos.em_risco} em risco`"></span>
+              <span :style="textoCheckinAtrasado(s) ? 'color:#fca5a5' : ''" x-text="textoCheckin(s)"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <div x-show="!panoramaLoading && panorama.length === 0" class="card" style="margin-top:24px; padding:32px; text-align:center;">
+        <p class="muted">Nenhum setor cadastrado ainda. Assim que houver setores, a velocidade de cada um aparece aqui.</p>
+      </div>
+    </section>
 
     <!-- ABA TAREFAS (default) -->
     <section x-show="tab === 'tarefas'" x-cloak>
@@ -292,7 +446,7 @@
             </h3>
             <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:10px;">
               <template x-for="o in objsBySetor(s.id)" :key="o.id">
-                <div class="obj-card" @click="abrirDrawerObjetivo(o.id)">
+                <div class="obj-card" @click="abrirCascata(o.id)">
                   <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
                     <span class="badge badge-neutral" x-text="NIVEL_LABEL[o.nivel]"></span>
                     <span :class="statusBadgeClass(o.status)" x-text="STATUS_LABEL[o.status]"></span>
@@ -341,6 +495,88 @@
     </section>
 
   </main>
+
+  <!-- ============ CASCATA: objetivo em 3 camadas ============ -->
+  <div class="cascata-page" x-show="cascata.aberto" x-cloak>
+    <div class="cascata-topbar">
+      <button class="btn btn-ghost" @click="fecharCascata()">← Voltar</button>
+      <div style="flex:1; min-width:0; display:flex; gap:8px; align-items:center;">
+        <span class="badge badge-neutral" x-text="NIVEL_LABEL[cascata.objetivo.nivel]"></span>
+        <span style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" x-text="cascata.objetivo.titulo"></span>
+      </div>
+      <button class="btn btn-ghost" @click="abrirDrawerObjetivo(cascata.objetivo.id)">Editar</button>
+    </div>
+
+    <div class="cascata-body">
+      <!-- Camada 1: OBJETIVO -->
+      <section class="camada">
+        <div class="camada-label">Objetivo</div>
+        <div class="card obj-headline">
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <span class="badge badge-neutral" x-text="NIVEL_LABEL[cascata.objetivo.nivel]"></span>
+            <span :class="statusBadgeClass(cascata.objetivo.status)" x-text="STATUS_LABEL[cascata.objetivo.status]"></span>
+            <span class="periodo-pill" x-text="periodoExtenso(cascata.objetivo)"></span>
+            <span class="badge badge-neutral" x-text="setorNome(cascata.objetivo.setor_id)"></span>
+          </div>
+          <h2 x-text="cascata.objetivo.titulo"></h2>
+          <p class="muted" style="margin:0 0 12px 0; font-size:13px; white-space:pre-wrap;" x-show="cascata.objetivo.descricao" x-text="cascata.objetivo.descricao"></p>
+          <div class="barra-dupla">
+            <div class="bar-prog" :style="`width:${cascata.objetivo.progresso_pct}%`"></div>
+            <div class="marker-tempo" x-show="cascata.objetivo.tempo_decorrido_pct != null"
+                 :style="`left:${cascata.objetivo.tempo_decorrido_pct}%`"></div>
+          </div>
+          <div class="legenda-barra">
+            <span x-text="cascata.objetivo.progresso_pct + '%'"></span>
+            <span :class="deltaTempoClass(cascata.objetivo)" x-text="textoDeltaTempo(cascata.objetivo)"></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Camada 2: PROJETOS -->
+      <section class="camada">
+        <div class="camada-label">Projetos <span class="cnt" x-text="`(${cascata.projetos.length})`"></span></div>
+        <div class="cascata-grid">
+          <template x-for="p in cascata.projetos" :key="p.id">
+            <div class="obj-card" @click="abrirDrawerProjeto(p.id)">
+              <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+                <span :class="statusBadgeClass(p.status)" x-text="STATUS_LABEL[p.status]"></span>
+                <span class="muted" style="font-size:11px;" x-show="p.prazo" x-text="fmtDataCurta(p.prazo)"></span>
+              </div>
+              <div style="font-weight:600; font-size:14px; margin-bottom:8px;" x-text="p.titulo"></div>
+              <div class="barra-dupla">
+                <div class="bar-prog" :style="`width:${p.progresso_pct}%`"></div>
+                <div class="marker-tempo" x-show="p.tempo_decorrido_pct != null" :style="`left:${p.tempo_decorrido_pct}%`"></div>
+              </div>
+              <div class="legenda-barra"><span x-text="p.progresso_pct + '%'"></span></div>
+            </div>
+          </template>
+        </div>
+        <div class="empty-camada" x-show="cascata.projetos.length === 0">Nenhum projeto ligado a este objetivo ainda.</div>
+      </section>
+
+      <!-- Camada 3: TAREFAS -->
+      <section class="camada">
+        <div class="camada-label">Tarefas <span class="cnt" x-text="`(${cascata.tarefas.length})`"></span></div>
+        <div style="display:grid; gap:8px;">
+          <template x-for="t in cascata.tarefas" :key="t.id">
+            <div class="tarefa-item" :class="{feita: t.status === 'feito'}" @click="abrirDrawerTarefa(t.id)">
+              <div class="check" :class="{feita: t.status === 'feito'}" @click.stop="toggleTarefaCascata(t)"></div>
+              <div style="flex:1; min-width:0;">
+                <div class="titulo" style="font-weight:600; font-size:14px;" x-text="t.titulo"></div>
+                <div class="tarefa-meta">
+                  <span class="pill" x-show="t.projeto_titulo" x-text="t.projeto_titulo"></span>
+                  <span class="pill" :class="{alta: t.prioridade === 'alta', baixa: t.prioridade === 'baixa'}" x-text="t.prioridade"></span>
+                  <span class="pill" x-show="t.prazo" :class="{atrasada: ehAtrasada(t)}"
+                        x-text="(ehAtrasada(t) ? 'Atrasada • ' : '') + fmtDataCurta(t.prazo)"></span>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="empty-camada" x-show="cascata.tarefas.length === 0">Nenhuma tarefa nos projetos deste objetivo.</div>
+      </section>
+    </div>
+  </div>
 
   <!-- FAB Criar -->
   <button class="fab" @click="abrirModalCriar('tarefa')" title="Criar (T=Tarefa, P=Projeto, M=Meta, O=OKR, D=Desafio)">+</button>
@@ -776,6 +1012,79 @@
     </div>
   </div>
 
+  <!-- ============ MODAL CHECK-IN (supervisor) ============ -->
+  <div class="modal-overlay" x-show="checkin.aberto" x-cloak @click.self="checkin.aberto = false">
+    <div class="modal">
+      <div style="padding:18px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0; font-size:16px;">Check-in da semana</h3>
+        <span style="cursor:pointer; font-size:22px; color:var(--text-dim);" @click="checkin.aberto = false">×</span>
+      </div>
+      <div style="padding:18px 20px;">
+        <div style="display:grid; gap:14px;">
+          <div>
+            <label class="muted" style="font-size:11px;">Como esta o setor essa semana? *</label>
+            <div class="rag-pick" style="margin-top:6px;">
+              <div class="rag-opt verde" :class="{sel: checkin.confidence === 'verde'}" @click="checkin.confidence = 'verde'">
+                <span class="rag-dot verde"></span> No ritmo
+              </div>
+              <div class="rag-opt amarelo" :class="{sel: checkin.confidence === 'amarelo'}" @click="checkin.confidence = 'amarelo'">
+                <span class="rag-dot amarelo"></span> Atencao
+              </div>
+              <div class="rag-opt vermelho" :class="{sel: checkin.confidence === 'vermelho'}" @click="checkin.confidence = 'vermelho'">
+                <span class="rag-dot vermelho"></span> Em risco
+              </div>
+            </div>
+          </div>
+          <div>
+            <label class="muted" style="font-size:11px;">Nota *</label>
+            <textarea class="input" rows="3" x-model="checkin.nota" placeholder="o que mudou / evidencia"></textarea>
+          </div>
+          <div>
+            <label class="muted" style="font-size:11px;">Bloqueio (opcional)</label>
+            <input class="input" x-model="checkin.bloqueio" placeholder="o que esta travando, se houver" />
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:18px;">
+          <button class="btn btn-ghost" @click="checkin.aberto = false">Cancelar</button>
+          <button class="btn btn-primary" @click="salvarCheckin()">Enviar check-in</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL VER CHECK-IN DO SETOR (diretor) ============ -->
+  <div class="modal-overlay" x-show="verCheckin.aberto" x-cloak @click.self="verCheckin.aberto = false">
+    <div class="modal">
+      <div style="padding:18px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="rag-dot" :class="verCheckin.confidence || ''"></span>
+          <h3 style="margin:0; font-size:16px;" x-text="verCheckin.setorNome"></h3>
+        </div>
+        <span style="cursor:pointer; font-size:22px; color:var(--text-dim);" @click="verCheckin.aberto = false">×</span>
+      </div>
+      <div style="padding:18px 20px;">
+        <template x-if="verCheckin.ultimo">
+          <div>
+            <div class="muted" style="font-size:11px; margin-bottom:8px;">
+              Por <strong style="color:var(--text);" x-text="verCheckin.ultimo.usuario_nome"></strong>
+              · <span x-text="fmtData(verCheckin.ultimo.criado_em)"></span>
+            </div>
+            <div class="com-item" style="margin-bottom:8px;">
+              <p style="margin:0; white-space:pre-wrap;" x-text="verCheckin.ultimo.nota"></p>
+            </div>
+            <div class="com-item" x-show="verCheckin.ultimo.bloqueio" style="border-left-color: rgba(239,68,68,0.4);">
+              <div style="font-size:10px; color:#fca5a5; text-transform:uppercase; letter-spacing:0.5px;">Bloqueio</div>
+              <p style="margin:4px 0 0 0; white-space:pre-wrap;" x-text="verCheckin.ultimo.bloqueio"></p>
+            </div>
+          </div>
+        </template>
+        <p class="muted" x-show="!verCheckin.ultimo" style="font-size:13px;">
+          Este setor ainda nao registrou nenhum check-in.
+        </p>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ TOAST ============ -->
   <div x-show="toast.msg" x-cloak
        style="position:fixed; bottom:24px; left:50%; transform:translateX(-50%); padding:10px 18px; background:#0f172a; border:1px solid var(--border-amber); border-radius:8px; z-index:50; font-size:13px;"
@@ -790,6 +1099,16 @@
         tab: localStorage.getItem('bbdi_tab') || 'tarefas',
         toast: { msg: '' },
         carregando: false,
+
+        // Panorama (diretor)
+        panorama: [],
+        panoramaAno: anoAtual(),
+        panoramaTri: trimestreAtual(),
+        panoramaLoading: false,
+
+        // Check-in
+        checkin: { aberto:false, confidence:'verde', nota:'', bloqueio:'' },
+        verCheckin: { aberto:false, setorNome:'', confidence:null, ultimo:null },
 
         // Tarefas
         tarefas: [],
@@ -806,6 +1125,9 @@
         // Drawer
         drawer: { aberto:false, tipo:'', tarefa:{}, objetivo:{}, projeto:{}, filhos:[], projetos:[], tarefas:[], comentarios:[], novoComentario:'', aceitaProjetos:false },
 
+        // Cascata (vista do objetivo em 3 camadas)
+        cascata: { aberto:false, objetivo:{}, projetos:[], tarefas:[] },
+
         // Modal criar
         modal: { aberto:false, tipo:'tarefa', titulo:'', descricao:'', setor_id:'', projeto_id:null, objetivo_id:null, parent_id:null, prazo:'', prioridade:'media', periodo_tipo:'trimestral', periodo_ano:anoAtual(), periodo_trimestre:trimestreAtual() },
 
@@ -813,6 +1135,10 @@
           try { this.me = await api.get('/api/me'); } catch (_) { return; }
           this.setores = await api.get('/api/setores');
           this.modal.setor_id = this.me.setor_id || (this.setores[0]?.id || '');
+          // Diretor abre no Panorama (visao estrategica) por padrao, salvo se ja escolheu outra aba.
+          if (this.me.papel === 'diretor' && !localStorage.getItem('bbdi_tab')) this.tab = 'panorama';
+          // Supervisor nunca fica preso numa aba inexistente pra ele.
+          if (this.me.papel !== 'diretor' && ['panorama','config'].includes(this.tab)) this.tab = 'tarefas';
           await this.carregarTudo();
         },
 
@@ -824,6 +1150,7 @@
         setTab(t) {
           this.tab = t;
           localStorage.setItem('bbdi_tab', t);
+          if (t === 'panorama') this.carregarPanorama();
           if (t === 'tarefas') this.carregarTarefas();
           if (t === 'objetivos') this.carregarObjetivos();
         },
@@ -835,7 +1162,88 @@
         },
 
         async carregarTudo() {
-          await Promise.all([this.carregarTarefas(), this.carregarCounts(), this.carregarObjetivos(), this.carregarProjetos()]);
+          const tarefas = [this.carregarTarefas(), this.carregarCounts(), this.carregarObjetivos(), this.carregarProjetos()];
+          if (this.me.papel === 'diretor') tarefas.push(this.carregarPanorama());
+          await Promise.all(tarefas);
+        },
+
+        // ============ Panorama (diretor) ============
+        async carregarPanorama() {
+          if (this.me.papel !== 'diretor') return;
+          this.panoramaLoading = true;
+          try {
+            const data = await api.get(`/api/dashboard/diretor?ano=${this.panoramaAno}&trimestre=${this.panoramaTri}`);
+            this.panorama = data.por_setor || [];
+          } catch (e) { console.error(e); this.showToast('Erro ao carregar panorama'); }
+          this.panoramaLoading = false;
+        },
+
+        nivelLabelTopo(template) {
+          return ({ okr: 'Objetivo', simples: 'Meta', desafios: 'Desafio' })[template] || 'Objetivo';
+        },
+
+        // Ranking: vermelho > amarelo > verde > sem check-in; depois menor progresso; depois mais dias sem check-in.
+        get panoramaOrdenado() {
+          const rank = { vermelho: 0, amarelo: 1, verde: 2 };
+          const peso = (c) => (c in rank ? rank[c] : 3);
+          return [...this.panorama].sort((a, b) => {
+            const pa = peso(a.checkin?.confidence), pb = peso(b.checkin?.confidence);
+            if (pa !== pb) return pa - pb;
+            const ga = a.objetivos?.progresso_medio ?? 0, gb = b.objetivos?.progresso_medio ?? 0;
+            if (ga !== gb) return ga - gb;
+            const da = a.checkin?.dias_desde ?? -1, db = b.checkin?.dias_desde ?? -1;
+            return db - da;
+          });
+        },
+
+        piorEmRisco(s) {
+          // So realca o topo se ele de fato esta mal: em risco/atencao, ou sem check-in, ou progresso baixo.
+          const c = s.checkin?.confidence;
+          return c === 'vermelho' || c === 'amarelo' || c == null || (s.objetivos?.progresso_medio ?? 0) < 50;
+        },
+
+        ragTitulo(c) {
+          return ({ verde: 'No ritmo', amarelo: 'Atencao', vermelho: 'Em risco' })[c] || 'Sem check-in';
+        },
+
+        textoCheckin(s) {
+          const d = s.checkin?.dias_desde;
+          if (d == null) return 'sem check-in';
+          if (d === 0) return 'check-in hoje';
+          return `ha ${d} ${d === 1 ? 'dia' : 'dias'} sem check-in`;
+        },
+
+        textoCheckinAtrasado(s) {
+          const d = s.checkin?.dias_desde;
+          return d == null || d >= 7;
+        },
+
+        // ============ Check-in (supervisor cria; diretor visualiza) ============
+        abrirCheckin() {
+          this.checkin = { aberto:true, confidence:'verde', nota:'', bloqueio:'' };
+        },
+
+        async salvarCheckin() {
+          const c = this.checkin;
+          if (!c.nota.trim()) { this.showToast('A nota e obrigatoria'); return; }
+          try {
+            await api.post('/api/checkins', {
+              confidence: c.confidence,
+              nota: c.nota.trim(),
+              bloqueio: (c.bloqueio || '').trim() || null,
+            });
+            this.checkin.aberto = false;
+            this.showToast('Check-in enviado ✓');
+          } catch (e) { this.showToast('Erro: ' + e.message); }
+        },
+
+        async verCheckinSetor(s) {
+          this.verCheckin = {
+            aberto: true,
+            setorNome: s.setor.nome,
+            confidence: s.checkin?.confidence || null,
+            ultimo: s.checkin?.ultimo || null,
+          };
         },
 
         async carregarTarefas() {
@@ -986,7 +1394,42 @@
           } catch (e) { alert(e.message); }
         },
 
-        fecharDrawer() { this.drawer.aberto = false; this.carregarTarefas(); this.carregarObjetivos(); this.carregarProjetos(); },
+        fecharDrawer() { this.drawer.aberto = false; this.carregarTarefas(); this.carregarObjetivos(); this.carregarProjetos(); this.recarregarCascata(); },
+
+        // ============ Cascata (3 camadas) ============
+        async abrirCascata(id) {
+          this.cascata = { aberto:true, objetivo:{}, projetos:[], tarefas:[] };
+          try {
+            const r = await api.get(`/api/objetivos/${id}/cascata`);
+            this.cascata.objetivo = r.objetivo;
+            this.cascata.projetos = r.projetos;
+            this.cascata.tarefas = r.tarefas;
+          } catch (e) { alert(e.message); this.cascata.aberto = false; }
+        },
+
+        fecharCascata() { this.cascata.aberto = false; this.carregarObjetivos(); },
+
+        async recarregarCascata() {
+          if (!this.cascata.aberto || !this.cascata.objetivo.id) return;
+          try {
+            const r = await api.get(`/api/objetivos/${this.cascata.objetivo.id}/cascata`);
+            this.cascata.objetivo = r.objetivo;
+            this.cascata.projetos = r.projetos;
+            this.cascata.tarefas = r.tarefas;
+          } catch (e) {
+            if (String(e.message).includes('404')) this.cascata.aberto = false;
+          }
+        },
+
+        async toggleTarefaCascata(t) {
+          const novo = t.status === 'feito' ? 'a_fazer' : 'feito';
+          try {
+            await api.post(`/api/tarefas/${t.id}/status`, { status: novo });
+            t.status = novo;
+            this.showToast(novo === 'feito' ? 'Tarefa feita ✓' : 'Reaberta');
+            this.recarregarCascata();
+          } catch (e) { alert(e.message); }
+        },
 
         async salvarTarefa() {
           const t = this.drawer.tarefa;

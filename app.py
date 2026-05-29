@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import STATIC_DIR
 from routes.auth_routes import router as auth_router
+from routes.checkin_routes import router as checkin_router
 from routes.comentarios_routes import router as comentarios_router
 from routes.dashboard_routes import router as dashboard_router
 from routes.objetivos_routes import router as objetivos_router
@@ -31,6 +32,7 @@ app.include_router(projetos_router)
 app.include_router(tarefas_router)
 app.include_router(comentarios_router)
 app.include_router(dashboard_router)
+app.include_router(checkin_router)
 
 # Paginas HTML
 app.include_router(pages_router)

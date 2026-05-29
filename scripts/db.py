@@ -25,6 +25,9 @@ def _connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    # Sob concorrencia (rollup de 2 requests na mesma meta), espera o lock em vez
+    # de estourar "database is locked" -> 500. WAL serializa os writes.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -159,6 +162,20 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_com_entidade
                 ON comentarios(entidade_tipo, entidade_id, criado_em);
 
+            CREATE TABLE IF NOT EXISTS checkins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                setor_id TEXT NOT NULL,
+                usuario_id INTEGER,
+                confidence TEXT NOT NULL CHECK (confidence IN ('verde', 'amarelo', 'vermelho')),
+                nota TEXT NOT NULL DEFAULT '',
+                bloqueio TEXT NOT NULL DEFAULT '',
+                criado_em TEXT NOT NULL,
+                FOREIGN KEY (setor_id) REFERENCES setores(id),
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_checkin_setor
+                ON checkins(setor_id, criado_em);
+
             CREATE TABLE IF NOT EXISTS audit_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 usuario_id INTEGER,
@@ -172,6 +189,15 @@ def init_db() -> None:
             # Migracoes idempotentes (colunas adicionadas em versoes posteriores)
             _alter_idempotente(conn, "ALTER TABLE projetos ADD COLUMN data_inicio TEXT")
             _alter_idempotente(conn, "ALTER TABLE projetos ADD COLUMN data_fim TEXT")
+
+            # progresso_modo: 'auto' = progresso derivado dos filhos (rollup);
+            # 'manual' = digitado/override pelo diretor. Objetivos legados (criados
+            # antes do rollup) ficam 'manual' para NAO sobrescrever o que ja foi
+            # informado a mao; novos objetivos nascem 'auto' (ver objetivos_db.criar).
+            _alter_idempotente(conn, "ALTER TABLE objetivos ADD COLUMN progresso_modo TEXT")
+            conn.execute(
+                "UPDATE objetivos SET progresso_modo = 'manual' WHERE progresso_modo IS NULL"
+            )
 
 
 if __name__ == "__main__":

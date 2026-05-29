@@ -11,13 +11,17 @@ from scripts.objetivos_db import (
     criar,
     get,
     get_com_filhos,
+    ids_subarvore,
     listar,
+    recalcular_progresso,
     soft_delete,
     trocar_nivel,
     validar_hierarquia_global,
 )
 from scripts.periodo import pct_tempo_decorrido, periodo_para_datas
+from scripts.projetos_db import listar_por_objetivos
 from scripts.setores_db import get as get_setor
+from scripts.tarefas_db import listar_por_projetos
 
 
 def _enriquecer(o: dict) -> dict:
@@ -60,6 +64,28 @@ async def get_objetivo(objetivo_id: int, user: dict = Depends(require_user)):
     _enriquecer(obj)
     obj["filhos"] = [_enriquecer(f) for f in (obj.get("filhos") or [])]
     return obj
+
+
+@router.get("/{objetivo_id}/cascata")
+async def cascata_objetivo(objetivo_id: int, user: dict = Depends(require_user)):
+    """Tres camadas do objetivo: o proprio, todos os projetos da sua subarvore
+    (metas/KRs filhas inclusas) e todas as tarefas desses projetos."""
+    obj = get(objetivo_id)
+    if not obj:
+        raise HTTPException(404, "Objetivo nao encontrado")
+    if not pode_acessar_setor(user, obj["setor_id"]):
+        raise HTTPException(403, "Acesso negado")
+
+    projetos = listar_por_objetivos(ids_subarvore(objetivo_id))
+    for p in projetos:
+        p["tempo_decorrido_pct"] = pct_tempo_decorrido(p.get("data_inicio"), p.get("data_fim"))
+
+    tarefas = listar_por_projetos([p["id"] for p in projetos])
+    titulo_por_projeto = {p["id"]: p["titulo"] for p in projetos}
+    for t in tarefas:
+        t["projeto_titulo"] = titulo_por_projeto.get(t["projeto_id"], "")
+
+    return {"objetivo": _enriquecer(obj), "projetos": projetos, "tarefas": tarefas}
 
 
 @router.post("")
@@ -167,10 +193,24 @@ async def set_progresso(
     pct = payload.get("progresso_pct")
     if not isinstance(pct, int) or not (0 <= pct <= 100):
         raise HTTPException(400, "progresso_pct deve ser int 0-100")
-    campos = {"progresso_pct": pct}
+    # Digitar progresso a mao = override: vira modo manual para o rollup nao sobrescrever.
+    campos = {"progresso_pct": pct, "progresso_modo": "manual"}
     if "status" in payload:
         campos["status"] = payload["status"]
     atualizar(objetivo_id, campos)
+    return _enriquecer(get(objetivo_id))
+
+
+@router.post("/{objetivo_id}/recalcular")
+async def recalcular_objetivo(objetivo_id: int, user: dict = Depends(require_user)):
+    """Volta o objetivo para progresso automatico (rollup dos filhos)."""
+    obj = get(objetivo_id)
+    if not obj:
+        raise HTTPException(404, "Objetivo nao encontrado")
+    if not pode_acessar_setor(user, obj["setor_id"]):
+        raise HTTPException(403, "Acesso negado")
+    atualizar(objetivo_id, {"progresso_modo": "auto"})
+    recalcular_progresso(objetivo_id)
     return _enriquecer(get(objetivo_id))
 
 
