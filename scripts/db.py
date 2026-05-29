@@ -25,6 +25,9 @@ def _connect() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    # Sob concorrencia (rollup de 2 requests na mesma meta), espera o lock em vez
+    # de estourar "database is locked" -> 500. WAL serializa os writes.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 

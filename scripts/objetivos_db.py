@@ -210,16 +210,56 @@ def criar(
     return novo_id
 
 
-def recalcular_progresso(objetivo_id: int) -> Optional[int]:
-    """Rollup: progresso do objetivo = media dos filhos diretos (projetos nao
-    cancelados + sub-objetivos), e propaga a mudanca para o pai.
+def _tarefas_ativas_subarvore(conn, objetivo_id: int) -> int:
+    """Conta tarefas ativas (nao deletadas, nao canceladas) de todos os projetos
+    sob este objetivo e seus descendentes. E o "peso" do objetivo no rollup do pai:
+    um galho que cobre 100 tarefas pesa mais que uma folha com 1."""
+    ids = {objetivo_id}  # set: dedupe protege contra parent_id ciclico (sem CHECK no schema)
+    fila = [objetivo_id]
+    while fila:
+        atual = fila.pop()
+        for f in conn.execute(
+            "SELECT id FROM objetivos WHERE parent_id = ? AND deletado_em IS NULL",
+            (atual,),
+        ).fetchall():
+            if f["id"] not in ids:
+                ids.add(f["id"])
+                fila.append(f["id"])
+    ids = list(ids)
+    placeholders = ",".join("?" * len(ids))
+    row = conn.execute(
+        f"""SELECT COUNT(*) AS n FROM tarefas t
+            JOIN projetos p ON p.id = t.projeto_id
+            WHERE p.deletado_em IS NULL AND p.status != 'cancelado'
+              AND t.deletado_em IS NULL AND t.status != 'cancelado'
+              AND p.objetivo_id IN ({placeholders})""",
+        ids,
+    ).fetchone()
+    return row["n"] or 0
 
+
+def recalcular_progresso(objetivo_id: int, _visitados: Optional[set] = None) -> Optional[int]:
+    """Rollup: progresso do objetivo = media dos filhos diretos PONDERADA pelo
+    numero de tarefas ativas que cada filho cobre, e propaga a mudanca para o pai.
+
+    - Ponderacao por tarefas (nao media simples): um projeto de 1 tarefa nao pesa
+      igual a um de 100. Sem isso o numero do diretor seria enganoso (media de
+      medias), ferindo a premissa "velocidade medida, nao digitada". Marcos sem
+      tarefas pesam 1 (contam como um item).
     - So sobrescreve progresso_pct se progresso_modo != 'manual' (preserva override).
+    - Em modo auto SEM filhos ativos -> progresso = 0 (mata o "progresso fantasma":
+      antes, ao cancelar/deletar o ultimo filho, o objetivo ficava no % antigo).
+      Uma meta acompanhada a mao deve estar em modo 'manual', nao 'auto'.
     - Mesmo em modo manual, propaga para o pai (o pai pode estar em auto).
-    - Sem filhos: nao mexe (deixa o valor atual; ex.: meta-folha sem projetos).
 
     Retorna o novo progresso_pct (ou None se nada recalculado).
     """
+    if _visitados is None:
+        _visitados = set()
+    if objetivo_id in _visitados:  # guarda de ciclo (parent_id sem CHECK no schema)
+        return None
+    _visitados.add(objetivo_id)
+
     novo: Optional[int] = None
     with connect() as conn:
         obj = conn.execute(
@@ -231,25 +271,37 @@ def recalcular_progresso(objetivo_id: int) -> Optional[int]:
             return None
         parent_id = obj["parent_id"]
         projetos = conn.execute(
-            "SELECT progresso_pct FROM projetos "
-            "WHERE objetivo_id = ? AND deletado_em IS NULL AND status != 'cancelado'",
+            """SELECT p.progresso_pct AS pct,
+                      (SELECT COUNT(*) FROM tarefas t
+                       WHERE t.projeto_id = p.id AND t.deletado_em IS NULL
+                         AND t.status != 'cancelado') AS peso
+               FROM projetos p
+               WHERE p.objetivo_id = ? AND p.deletado_em IS NULL AND p.status != 'cancelado'""",
             (objetivo_id,),
         ).fetchall()
         subobjetivos = conn.execute(
-            "SELECT progresso_pct FROM objetivos "
+            "SELECT id, progresso_pct AS pct FROM objetivos "
             "WHERE parent_id = ? AND deletado_em IS NULL",
             (objetivo_id,),
         ).fetchall()
-        valores = [r["progresso_pct"] for r in projetos] + [r["progresso_pct"] for r in subobjetivos]
-        if valores and obj["progresso_modo"] != "manual":
-            novo = round(sum(valores) / len(valores))
+        # (pct, peso) por filho; peso minimo 1 para marcos sem tarefas.
+        itens = [(p["pct"], p["peso"]) for p in projetos]
+        for s in subobjetivos:
+            itens.append((s["pct"], _tarefas_ativas_subarvore(conn, s["id"])))
+
+        if obj["progresso_modo"] != "manual":
+            if itens:
+                peso_total = sum(max(peso, 1) for _, peso in itens)
+                novo = round(sum(pct * max(peso, 1) for pct, peso in itens) / peso_total)
+            else:
+                novo = 0
             conn.execute(
                 "UPDATE objetivos SET progresso_pct = ?, atualizado_em = ? WHERE id = ?",
                 (novo, now_iso(), objetivo_id),
             )
     # Propaga para cima apos o commit (leitura fresca em cada nivel).
     if parent_id is not None:
-        recalcular_progresso(parent_id)
+        recalcular_progresso(parent_id, _visitados)
     return novo
 
 
